@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TuoBuilds Consult — Cost Estimator</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0a1628;
+    --navy-mid: #112240;
+    --navy-light: #1a3558;
+    --gold: #c9a84c;
+    --gold-light: #e8c97a;
+    --gold-dim: #8a6f30;
+    --white: #f4f1ea;
+    --text-muted: #8a9bb5;
+    --border: rgba(201,168,76,0.2);
+    --success: #4caf82;
+    --danger: #e05a5a;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--navy);
+    color: var(--white);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Background texture */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80% 60% at 10% 0%, rgba(201,168,76,0.07) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 80% at 90% 100%, rgba(10,22,40,0.9) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .grid-bg {
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(201,168,76,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(201,168,76,0.03) 1px, transparent 1px);
+    background-size: 48px 48px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrapper {
+    position: relative;
+    z-index: 1;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+  }
+
+  /* HEADER */
+  header {
+    text-align: center;
+    margin-bottom: 56px;
+    animation: fadeUp 0.7s ease both;
+  }
+
+  .logo-mark {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .logo-icon {
+    width: 42px;
+    height: 42px;
+    border: 2px solid var(--gold);
+    transform: rotate(45deg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  .logo-icon::after {
+    content: '';
+    width: 16px;
+    height: 16px;
+    background: var(--gold);
+    display: block;
+  }
+
+  .brand {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--gold);
+  }
+
+  h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(2rem, 5vw, 3.2rem);
+    font-weight: 900;
+    line-height: 1.1;
+    color: var(--white);
+    margin-bottom: 12px;
+  }
+
+  h1 span {
+    color: var(--gold);
+  }
+
+  .subtitle {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .divider {
+    width: 60px;
+    height: 2px;
+    background: linear-gradient(90deg, var(--gold), transparent);
+    margin: 20px auto 0;
+  }
+
+  /* SECTIONS */
+  .section {
+    background: var(--navy-mid);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 32px;
+    margin-bottom: 20px;
+    animation: fadeUp 0.7s ease both;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .section::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 4px;
+    height: 100%;
+    background: linear-gradient(180deg, var(--gold), transparent);
+  }
+
+  .section-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* FORM GRID */
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  .form-grid.three {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+
+  @media (max-width: 600px) {
+    .form-grid, .form-grid.three { grid-template-columns: 1fr; }
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .field.full { grid-column: 1 / -1; }
+
+  label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  input, select {
+    background: var(--navy);
+    border: 1px solid rgba(201,168,76,0.25);
+    border-radius: 2px;
+    color: var(--white);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.92rem;
+    padding: 10px 14px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    width: 100%;
+    appearance: none;
+  }
+
+  input:focus, select:focus {
+    border-color: var(--gold);
+    box-shadow: 0 0 0 3px rgba(201,168,76,0.1);
+  }
+
+  input::placeholder { color: var(--navy-light); }
+
+  select option { background: var(--navy-mid); }
+
+  /* MATERIALS TABLE */
+  .materials-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .materials-table th {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--gold-dim);
+    padding: 0 8px 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .materials-table td {
+    padding: 6px 8px;
+    vertical-align: middle;
+  }
+
+  .materials-table tr:not(:last-child) td {
+    border-bottom: 1px solid rgba(201,168,76,0.07);
+  }
+
+  .materials-table input, .materials-table select {
+    padding: 8px 10px;
+    font-size: 0.85rem;
+  }
+
+  .row-total {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--gold-light);
+    text-align: right;
+    min-width: 90px;
+  }
+
+  .btn-remove {
+    background: none;
+    border: 1px solid rgba(224,90,90,0.3);
+    color: var(--danger);
+    width: 28px;
+    height: 28px;
+    border-radius: 2px;
+    cursor: pointer;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+
+  .btn-remove:hover {
+    background: rgba(224,90,90,0.1);
+    border-color: var(--danger);
+  }
+
+  .btn-add {
+    margin-top: 14px;
+    background: none;
+    border: 1px dashed rgba(201,168,76,0.35);
+    color: var(--gold);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 10px 20px;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn-add:hover {
+    background: rgba(201,168,76,0.08);
+    border-color: var(--gold);
+  }
+
+  /* CURRENCY */
+  .currency-badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    background: rgba(201,168,76,0.15);
+    color: var(--gold);
+    padding: 2px 7px;
+    border-radius: 2px;
+    letter-spacing: 0.1em;
+    display: inline-block;
+    margin-left: 8px;
+  }
+
+  /* SUMMARY */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+
+  @media (max-width: 500px) { .summary-grid { grid-template-columns: 1fr; } }
+
+  .summary-item {
+    background: var(--navy);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .summary-item.accent {
+    border-color: var(--gold);
+    background: rgba(201,168,76,0.05);
+  }
+
+  .summary-key {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .summary-val {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--white);
+  }
+
+  .summary-item.accent .summary-val {
+    color: var(--gold-light);
+    font-size: 1.7rem;
+  }
+
+  /* ACTIONS */
+  .actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .btn-primary {
+    flex: 1;
+    background: var(--gold);
+    color: var(--navy);
+    border: none;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.8rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    padding: 14px 28px;
+    border-radius: 2px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .btn-primary:hover {
+    background: var(--gold-light);
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px rgba(201,168,76,0.25);
+  }
+
+  .btn-secondary {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.8rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 14px 24px;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-secondary:hover {
+    border-color: var(--gold-dim);
+    color: var(--gold);
+  }
+
+  /* RESULT PANEL */
+  #result-panel {
+    display: none;
+    animation: fadeUp 0.5s ease both;
+  }
+
+  .result-breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+
+  .result-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px;
+    background: var(--navy);
+    border-radius: 2px;
+    border-left: 3px solid transparent;
+  }
+
+  .result-row.mat { border-left-color: #4c7fc9; }
+  .result-row.lab { border-left-color: #4cc97a; }
+  .result-row.ov  { border-left-color: #c9844c; }
+  .result-row.con { border-left-color: var(--gold); }
+  .result-row.vat { border-left-color: #9b4cc9; }
+  .result-row.tot {
+    border-left-color: var(--gold);
+    background: rgba(201,168,76,0.1);
+    border: 1px solid var(--gold);
+    border-left: 3px solid var(--gold);
+  }
+
+  .result-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+
+  .result-row.tot .result-label {
+    color: var(--gold);
+    font-weight: 500;
+  }
+
+  .result-amount {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.9rem;
+    color: var(--white);
+  }
+
+  .result-row.tot .result-amount {
+    font-size: 1.15rem;
+    color: var(--gold-light);
+    font-weight: 500;
+  }
+
+  /* PRINT */
+  .print-header {
+    display: none;
+  }
+
+  @media print {
+    body { background: white; color: #0a1628; }
+    body::before, .grid-bg { display: none; }
+    .actions, .btn-add { display: none !important; }
+    .print-header { display: block; margin-bottom: 24px; }
+    .section { border: 1px solid #ddd; }
+    .section::before { display: none; }
+    input, select { border: 1px solid #ccc; color: #0a1628; background: white; }
+    .summary-val, .result-amount { color: #0a1628; }
+    .result-row { background: #f5f5f5; }
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .section:nth-child(2) { animation-delay: 0.1s; }
+  .section:nth-child(3) { animation-delay: 0.2s; }
+  .section:nth-child(4) { animation-delay: 0.3s; }
+
+  .tag {
+    display: inline-block;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    background: rgba(76,127,201,0.15);
+    color: #7aadff;
+    padding: 2px 8px;
+    border-radius: 2px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    vertical-align: middle;
+  }
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+
+<div class="wrapper">
+  <div class="print-header">
+    <strong>TuoBuilds Consult</strong> — Project Cost Estimate
+  </div>
+
+  <header>
+    <div class="logo-mark">
+      <div class="logo-icon"></div>
+      <div class="brand">TuoBuilds Consult</div>
+    </div>
+    <h1>Project <span>Cost Estimator</span></h1>
+    <p class="subtitle">Construction · Civil · Structural</p>
+    <div class="divider"></div>
+  </header>
+
+  <!-- PROJECT INFO -->
+  <div class="section">
+    <div class="section-label">01 — Project Details</div>
+    <div class="form-grid">
+      <div class="field full">
+        <label>Project Name / Description</label>
+        <input type="text" id="proj-name" placeholder="e.g. 3-Bedroom Residential Build — East Legon">
+      </div>
+      <div class="field">
+        <label>Client Name</label>
+        <input type="text" id="client-name" placeholder="Client / Ref">
+      </div>
+      <div class="field">
+        <label>Location</label>
+        <input type="text" id="location" placeholder="e.g. Accra, Ghana">
+      </div>
+      <div class="field">
+        <label>Project Type</label>
+        <select id="proj-type">
+          <option value="residential">Residential</option>
+          <option value="commercial">Commercial</option>
+          <option value="industrial">Industrial</option>
+          <option value="infrastructure">Infrastructure</option>
+          <option value="renovation">Renovation</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Currency <span class="currency-badge" id="curr-badge">GHS</span></label>
+        <select id="currency" onchange="updateCurrency()">
+          <option value="GHS">GHS — Ghanaian Cedi</option>
+          <option value="USD">USD — US Dollar</option>
+          <option value="GBP">GBP — British Pound</option>
+          <option value="EUR">EUR — Euro</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- MATERIALS -->
+  <div class="section">
+    <div class="section-label">02 — Materials <span class="tag">Unit Rates</span></div>
+    <table class="materials-table">
+      <thead>
+        <tr>
+          <th style="width:35%">Item</th>
+          <th style="width:15%">Qty</th>
+          <th style="width:18%">Unit</th>
+          <th style="width:18%">Rate (<span class="curr-sym">GHS</span>)</th>
+          <th style="width:10%; text-align:right">Total</th>
+          <th style="width:4%"></th>
+        </tr>
+      </thead>
+      <tbody id="mat-body"></tbody>
+    </table>
+    <button class="btn-add" onclick="addMaterialRow()">＋ Add Item</button>
+  </div>
+
+  <!-- LABOUR -->
+  <div class="section">
+    <div class="section-label">03 — Labour</div>
+    <table class="materials-table">
+      <thead>
+        <tr>
+          <th style="width:35%">Trade / Role</th>
+          <th style="width:15%">Days</th>
+          <th style="width:15%">Workers</th>
+          <th style="width:21%">Day Rate (<span class="curr-sym">GHS</span>)</th>
+          <th style="width:10%; text-align:right">Total</th>
+          <th style="width:4%"></th>
+        </tr>
+      </thead>
+      <tbody id="lab-body"></tbody>
+    </table>
+    <button class="btn-add" onclick="addLabourRow()">＋ Add Trade</button>
+  </div>
+
+  <!-- RATES & MARGINS -->
+  <div class="section">
+    <div class="section-label">04 — Overhead &amp; Margins</div>
+    <div class="form-grid three">
+      <div class="field">
+        <label>Overhead (%)</label>
+        <input type="number" id="overhead" value="10" min="0" max="100" step="0.5">
+      </div>
+      <div class="field">
+        <label>Contingency (%)</label>
+        <input type="number" id="contingency" value="5" min="0" max="100" step="0.5">
+      </div>
+      <div class="field">
+        <label>VAT / Tax (%)</label>
+        <input type="number" id="vat" value="0" min="0" max="50" step="0.5">
+      </div>
+    </div>
+  </div>
+
+  <!-- LIVE SUMMARY -->
+  <div class="section">
+    <div class="section-label">05 — Live Summary</div>
+    <div class="summary-grid">
+      <div class="summary-item">
+        <div class="summary-key">Materials Subtotal</div>
+        <div class="summary-val" id="s-mat">0.00</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-key">Labour Subtotal</div>
+        <div class="summary-val" id="s-lab">0.00</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-key">Direct Cost</div>
+        <div class="summary-val" id="s-direct">0.00</div>
+      </div>
+      <div class="summary-item accent">
+        <div class="summary-key">Estimated Total</div>
+        <div class="summary-val" id="s-total">0.00</div>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn-primary" onclick="generateReport()">⬇ Generate Full Report</button>
+      <button class="btn-secondary" onclick="exportTxt()">⎙ Export .txt</button>
+      <button class="btn-secondary" onclick="clearAll()">✕ Clear All</button>
+      <button class="btn-secondary" onclick="window.print()">⎙ Print</button>
+    </div>
+  </div>
+
+  <!-- RESULT PANEL -->
+  <div class="section" id="result-panel">
+    <div class="section-label">06 — Cost Breakdown Report</div>
+    <div style="margin-bottom:16px;">
+      <div style="font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:700;" id="r-title">—</div>
+      <div style="font-family:'DM Mono',monospace;font-size:0.72rem;color:var(--text-muted);margin-top:4px;" id="r-meta">—</div>
+    </div>
+    <div class="result-breakdown" id="breakdown-rows"></div>
+    <div style="margin-top:20px;">
+      <button class="btn-secondary" onclick="exportTxt()" style="border-color:var(--gold);color:var(--gold);">⎙ Download Report as .txt</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ─── State ───────────────────────────────────────────
+let matRows = [];
+let labRows = [];
+let currSymbol = 'GHS';
+
+const defaultMaterials = [
+  { item: 'Cement (bags)', qty: 100, unit: 'bags', rate: 85 },
+  { item: 'Sand (tons)',   qty: 20,  unit: 'tons', rate: 250 },
+  { item: 'Gravel (tons)', qty: 15,  unit: 'tons', rate: 300 },
+  { item: 'Reinforcement bars', qty: 500, unit: 'kg', rate: 12 },
+];
+
+const defaultLabour = [
+  { role: 'Mason', days: 30, workers: 4, rate: 120 },
+  { role: 'Labourer', days: 30, workers: 6, rate: 70 },
+];
+
+const unitOptions = ['bags','m³','m²','m','kg','tons','rolls','pcs','litres','sets'];
+const labourRoles = ['Mason','Carpenter','Steel Fixer','Electrician','Plumber','Painter','Labourer','Foreman','Surveyor','Driver'];
+
+// ─── Init ─────────────────────────────────────────────
+window.onload = () => {
+  defaultMaterials.forEach(d => addMaterialRow(d));
+  defaultLabour.forEach(d => addLabourRow(d));
+  recalc();
+};
+
+// ─── Materials ────────────────────────────────────────
+function addMaterialRow(data = {}) {
+  const id = Date.now() + Math.random();
+  const row = { id, item: data.item||'', qty: data.qty||1, unit: data.unit||'m³', rate: data.rate||0 };
+  matRows.push(row);
+  renderMatRows();
+}
+
+function renderMatRows() {
+  const tbody = document.getElementById('mat-body');
+  tbody.innerHTML = '';
+  matRows.forEach(row => {
+    const total = (row.qty * row.rate).toFixed(2);
+    const unitOpts = unitOptions.map(u => `<option ${u===row.unit?'selected':''}>${u}</option>`).join('');
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="text" value="${row.item}" placeholder="Item name" onchange="updateMat('${row.id}','item',this.value)"></td>
+      <td><input type="number" value="${row.qty}" min="0" step="any" onchange="updateMat('${row.id}','qty',+this.value)" oninput="updateMat('${row.id}','qty',+this.value)"></td>
+      <td>
+        <select onchange="updateMat('${row.id}','unit',this.value)">
+          ${unitOpts}
+          <option ${!unitOptions.includes(row.unit)?'selected':''} value="${row.unit}">${row.unit||'other'}</option>
+        </select>
+      </td>
+      <td><input type="number" value="${row.rate}" min="0" step="any" onchange="updateMat('${row.id}','rate',+this.value)" oninput="updateMat('${row.id}','rate',+this.value)"></td>
+      <td class="row-total">${currSymbol} ${fmt(+total)}</td>
+      <td><button class="btn-remove" onclick="removeMat('${row.id}')">×</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+  recalc();
+}
+
+function updateMat(id, field, val) {
+  const row = matRows.find(r => r.id == id);
+  if (row) { row[field] = val; recalc(); updateRowTotal('mat', id, row); }
+}
+
+function updateRowTotal(type, id, row) {
+  // Recalc row totals inline
+  renderMatRows(); renderLabRows();
+}
+
+function removeMat(id) {
+  matRows = matRows.filter(r => r.id != id);
+  renderMatRows();
+}
+
+// ─── Labour ──────────────────────────────────────────
+function addLabourRow(data = {}) {
+  const id = Date.now() + Math.random();
+  const row = { id, role: data.role||'', days: data.days||1, workers: data.workers||1, rate: data.rate||0 };
+  labRows.push(row);
+  renderLabRows();
+}
+
+function renderLabRows() {
+  const tbody = document.getElementById('lab-body');
+  tbody.innerHTML = '';
+  labRows.forEach(row => {
+    const total = (row.days * row.workers * row.rate).toFixed(2);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="text" value="${row.role}" placeholder="e.g. Mason" onchange="updateLab('${row.id}','role',this.value)"></td>
+      <td><input type="number" value="${row.days}" min="0" oninput="updateLab('${row.id}','days',+this.value)"></td>
+      <td><input type="number" value="${row.workers}" min="1" oninput="updateLab('${row.id}','workers',+this.value)"></td>
+      <td><input type="number" value="${row.rate}" min="0" step="any" oninput="updateLab('${row.id}','rate',+this.value)"></td>
+      <td class="row-total">${currSymbol} ${fmt(+total)}</td>
+      <td><button class="btn-remove" onclick="removeLab('${row.id}')">×</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+  recalc();
+}
+
+function updateLab(id, field, val) {
+  const row = labRows.find(r => r.id == id);
+  if (row) { row[field] = val; renderLabRows(); }
+}
+
+function removeLab(id) {
+  labRows = labRows.filter(r => r.id != id);
+  renderLabRows();
+}
+
+// ─── Recalc ───────────────────────────────────────────
+function recalc() {
+  const matTotal = matRows.reduce((s, r) => s + r.qty * r.rate, 0);
+  const labTotal = labRows.reduce((s, r) => s + r.days * r.workers * r.rate, 0);
+  const direct   = matTotal + labTotal;
+  const ohPct    = +document.getElementById('overhead').value / 100 || 0;
+  const conPct   = +document.getElementById('contingency').value / 100 || 0;
+  const vatPct   = +document.getElementById('vat').value / 100 || 0;
+  const overhead = direct * ohPct;
+  const contingency = (direct + overhead) * conPct;
+  const subtotal = direct + overhead + contingency;
+  const vatAmt   = subtotal * vatPct;
+  const total    = subtotal + vatAmt;
+
+  document.getElementById('s-mat').textContent    = `${currSymbol} ${fmt(matTotal)}`;
+  document.getElementById('s-lab').textContent    = `${currSymbol} ${fmt(labTotal)}`;
+  document.getElementById('s-direct').textContent = `${currSymbol} ${fmt(direct)}`;
+  document.getElementById('s-total').textContent  = `${currSymbol} ${fmt(total)}`;
+
+  return { matTotal, labTotal, direct, overhead, contingency, vatAmt, subtotal, total, ohPct, conPct, vatPct };
+}
+
+// Auto-recalc on margin changes
+['overhead','contingency','vat'].forEach(id => {
+  document.getElementById(id).addEventListener('input', recalc);
+});
+
+// ─── Report ───────────────────────────────────────────
+function generateReport() {
+  const v = recalc();
+  const panel = document.getElementById('result-panel');
+  panel.style.display = 'block';
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  const projName = document.getElementById('proj-name').value || 'Unnamed Project';
+  const client   = document.getElementById('client-name').value;
+  const loc      = document.getElementById('location').value;
+  const type     = document.getElementById('proj-type').value;
+  const date     = new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+
+  document.getElementById('r-title').textContent = projName;
+  document.getElementById('r-meta').textContent  =
+    [client, loc, type].filter(Boolean).join(' · ') + ' · Generated ' + date;
+
+  const rows = [
+    { cls:'mat', label:'Materials', val: v.matTotal },
+    { cls:'lab', label:'Labour',    val: v.labTotal },
+    { cls:'ov',  label:`Overhead (${(v.ohPct*100).toFixed(1)}%)`, val: v.overhead },
+    { cls:'con', label:`Contingency (${(v.conPct*100).toFixed(1)}%)`, val: v.contingency },
+  ];
+  if (v.vatAmt > 0) rows.push({ cls:'vat', label:`VAT / Tax (${(v.vatPct*100).toFixed(1)}%)`, val: v.vatAmt });
+  rows.push({ cls:'tot', label:'TOTAL ESTIMATED COST', val: v.total });
+
+  document.getElementById('breakdown-rows').innerHTML = rows.map(r => `
+    <div class="result-row ${r.cls}">
+      <div class="result-label">${r.label}</div>
+      <div class="result-amount">${currSymbol} ${fmt(r.val)}</div>
+    </div>
+  `).join('');
+}
+
+// ─── Helpers ─────────────────────────────────────────
+function fmt(n) {
+  return n.toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function updateCurrency() {
+  currSymbol = document.getElementById('currency').value;
+  document.getElementById('curr-badge').textContent = currSymbol;
+  document.querySelectorAll('.curr-sym').forEach(el => el.textContent = currSymbol);
+  renderMatRows();
+  renderLabRows();
+}
+
+function clearAll() {
+  if (!confirm('Clear all items?')) return;
+  matRows = []; labRows = [];
+  renderMatRows(); renderLabRows();
+  document.getElementById('result-panel').style.display = 'none';
+  ['proj-name','client-name','location'].forEach(id => document.getElementById(id).value = '');
+}
+
+// ─── Export .txt ──────────────────────────────────────
+function exportTxt() {
+  const v = recalc();
+  const sym = currSymbol;
+  const W = 62;
+  const line = '='.repeat(W);
+  const dash = '-'.repeat(W);
+
+  const projName = document.getElementById('proj-name').value || 'Unnamed Project';
+  const client   = document.getElementById('client-name').value;
+  const loc      = document.getElementById('location').value;
+  const type     = document.getElementById('proj-type').value;
+  const date     = new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+
+  const pad = (str, w) => String(str).padEnd(w);
+  const padL = (str, w) => String(str).padStart(w);
+  const fmtN = n => n.toLocaleString('en-GH', { minimumFractionDigits:2, maximumFractionDigits:2 });
+
+  let lines = [];
+  lines.push(line);
+  lines.push('  TUOBUILDS CONSULT — PROJECT COST ESTIMATE');
+  lines.push(line);
+  lines.push(`  Project  : ${projName}`);
+  if (client) lines.push(`  Client   : ${client}`);
+  if (loc)    lines.push(`  Location : ${loc}`);
+  lines.push(`  Type     : ${type}`);
+  lines.push(`  Date     : ${date}`);
+  lines.push(dash);
+
+  // Materials
+  lines.push('');
+  lines.push('  MATERIALS');
+  lines.push(`  ${pad('Item',28)} ${pad('Qty',7)} ${pad('Unit',7)} ${padL('Rate',12)}  ${padL('Total',12)}`);
+  lines.push('  ' + '-'.repeat(W - 2));
+  matRows.forEach(r => {
+    const total = r.qty * r.rate;
+    lines.push(`  ${pad(r.item,28)} ${pad(r.qty,7)} ${pad(r.unit,7)} ${padL(sym+' '+fmtN(r.rate),12)}  ${padL(sym+' '+fmtN(total),12)}`);
+  });
+  lines.push(`  ${pad('Subtotal',44)} ${padL(sym+' '+fmtN(v.matTotal),14)}`);
+
+  // Labour
+  lines.push('');
+  lines.push('  LABOUR');
+  lines.push(`  ${pad('Role',22)} ${pad('Days',6)} ${pad('Workers',8)} ${padL('Day Rate',12)}  ${padL('Total',12)}`);
+  lines.push('  ' + '-'.repeat(W - 2));
+  labRows.forEach(r => {
+    const total = r.days * r.workers * r.rate;
+    lines.push(`  ${pad(r.role,22)} ${pad(r.days,6)} ${pad(r.workers,8)} ${padL(sym+' '+fmtN(r.rate),12)}  ${padL(sym+' '+fmtN(total),12)}`);
+  });
+  lines.push(`  ${pad('Subtotal',44)} ${padL(sym+' '+fmtN(v.labTotal),14)}`);
+
+  // Summary
+  lines.push('');
+  lines.push(line);
+  lines.push('  COST BREAKDOWN');
+  lines.push(dash);
+  lines.push(`  ${pad('Direct Cost (Materials + Labour)',44)} ${padL(sym+' '+fmtN(v.direct),14)}`);
+  lines.push(`  ${pad('Overhead ('+( v.ohPct*100).toFixed(1)+'%)',44)} ${padL(sym+' '+fmtN(v.overhead),14)}`);
+  lines.push(`  ${pad('Contingency ('+(v.conPct*100).toFixed(1)+'%)',44)} ${padL(sym+' '+fmtN(v.contingency),14)}`);
+  if (v.vatAmt > 0)
+    lines.push(`  ${pad('VAT / Tax ('+(v.vatPct*100).toFixed(1)+'%)',44)} ${padL(sym+' '+fmtN(v.vatAmt),14)}`);
+  lines.push(line);
+  lines.push(`  ${pad('TOTAL ESTIMATED COST',44)} ${padL(sym+' '+fmtN(v.total),14)}`);
+  lines.push(line);
+  lines.push('');
+  lines.push('  TuoBuilds Consult | Civil & Structural Engineering');
+
+  const content = lines.join('\n');
+
+  // Trigger download
+  const safeName = projName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+  const dateStr  = new Date().toISOString().slice(0,10);
+  const filename = `${safeName}_${dateStr}.txt`;
+
+  const blob = new Blob([content], { type: 'text/plain' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>
