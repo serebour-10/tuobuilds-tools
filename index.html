@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>TuoBuilds Consult — Project Tools</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0a1628;color:#f4f1ea;font-family:sans-serif;min-height:100vh}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:#0a1628}
+::-webkit-scrollbar-thumb{background:#8a6f30;border-radius:3px}
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+input:focus,select:focus,textarea:focus{border-color:#c9a84c!important;box-shadow:0 0 0 2px rgba(201,168,76,0.12)!important;outline:none}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useRef}=React;
+
+const NAVY="#0a1628",NAVY_M="#112240",NAVY_L="#1a3558",GOLD="#c9a84c",GOLD_L="#e8c97a",
+      GOLD_D="#8a6f30",WHITE="#f4f1ea",MUTED="#8a9bb5",BORDER="rgba(201,168,76,0.2)",
+      DANGER="#e05a5a",OK="#4caf82",BLUE="#4c7fc9",PURPLE="#9b4cc9",ORANGE="#c9844c";
+
+const UNITS=["bags","m³","m²","m","kg","tons","rolls","pcs","litres","sets","lump sum"];
+const CURRS=["GHS","USD","GBP","EUR"];
+const TYPES=["Residential","Commercial","Industrial","Infrastructure","Renovation"];
+const BOQ_SECTIONS=["Preliminaries","Substructure / Foundation","Superstructure / Frame",
+  "Roofing","External Walls","Internal Walls & Partitions","Floors","Ceilings",
+  "Windows & Doors","Finishes","Plumbing & Drainage","Electrical Works","External Works","Provisional Sums"];
+
+const GH_PRICES=[
+  {cat:"Concrete & Masonry",item:"Cement (42.5 Grade bag)",unit:"bags",rate:85,note:"Ex-factory Kumasi"},
+  {cat:"Concrete & Masonry",item:"Sand (sharp/filling)",unit:"tons",rate:250,note:"Quarry price"},
+  {cat:"Concrete & Masonry",item:"Gravel / Granite chips",unit:"tons",rate:300,note:""},
+  {cat:"Concrete & Masonry",item:"Sandcrete block (6\")",unit:"pcs",rate:8,note:"Per block laid"},
+  {cat:"Concrete & Masonry",item:"Sandcrete block (9\")",unit:"pcs",rate:11,note:""},
+  {cat:"Steel & Reinforcement",item:"Y10 rebar (12m length)",unit:"pcs",rate:110,note:""},
+  {cat:"Steel & Reinforcement",item:"Y12 rebar (12m length)",unit:"pcs",rate:155,note:""},
+  {cat:"Steel & Reinforcement",item:"Y16 rebar (12m length)",unit:"pcs",rate:270,note:""},
+  {cat:"Steel & Reinforcement",item:"Binding wire",unit:"kg",rate:18,note:""},
+  {cat:"Steel & Reinforcement",item:"BRC mesh A252",unit:"m²",rate:95,note:""},
+  {cat:"Roofing",item:"Aluminum roofing sheet (0.55mm)",unit:"m²",rate:120,note:"Per m²"},
+  {cat:"Roofing",item:"Long span roofing (0.55mm)",unit:"m²",rate:145,note:""},
+  {cat:"Roofing",item:"Roof truss (timber, 3m span)",unit:"sets",rate:850,note:""},
+  {cat:"Roofing",item:"Roofing nails (1kg)",unit:"kg",rate:22,note:""},
+  {cat:"Timber & Formwork",item:"Plywood sheet (18mm)",unit:"pcs",rate:220,note:""},
+  {cat:"Timber & Formwork",item:"Timber 2\"×4\"×16ft",unit:"pcs",rate:75,note:""},
+  {cat:"Timber & Formwork",item:"Timber 2\"×6\"×16ft",unit:"pcs",rate:110,note:""},
+  {cat:"Plumbing",item:"PVC pipe 4\" (6m)",unit:"pcs",rate:185,note:""},
+  {cat:"Plumbing",item:"PVC pipe 2\" (6m)",unit:"pcs",rate:95,note:""},
+  {cat:"Plumbing",item:"Polytank 1000L",unit:"pcs",rate:1200,note:""},
+  {cat:"Electrical",item:"2.5mm² cable (100m roll)",unit:"rolls",rate:650,note:""},
+  {cat:"Electrical",item:"4mm² cable (100m roll)",unit:"rolls",rate:1100,note:""},
+  {cat:"Electrical",item:"Consumer unit (8-way)",unit:"pcs",rate:750,note:""},
+  {cat:"Finishes",item:"Floor tiles (600×600mm)",unit:"m²",rate:95,note:"Local brand"},
+  {cat:"Finishes",item:"Wall tiles (300×450mm)",unit:"m²",rate:85,note:""},
+  {cat:"Finishes",item:"Paint (interior emulsion 20L)",unit:"pcs",rate:420,note:""},
+  {cat:"Finishes",item:"Paint (exterior 20L)",unit:"pcs",rate:560,note:""},
+  {cat:"Finishes",item:"Cement plaster (bags)",unit:"bags",rate:82,note:""},
+  {cat:"Doors & Windows",item:"Flush door (solid core 900×2100)",unit:"pcs",rate:1800,note:""},
+  {cat:"Doors & Windows",item:"Aluminum casement window 1.2×1.2m",unit:"pcs",rate:950,note:""},
+  {cat:"Doors & Windows",item:"Burglar bars (per m²)",unit:"m²",rate:320,note:"Welded steel"},
+  {cat:"Earthworks",item:"Excavation (hand)",unit:"m³",rate:80,note:"Per m³"},
+  {cat:"Earthworks",item:"Backfilling (compact)",unit:"m³",rate:60,note:""},
+  {cat:"Earthworks",item:"Hardcore filling",unit:"tons",rate:220,note:""},
+];
+
+const LABOUR_TEMPLATES=[
+  {role:"Site Foreman",days:60,workers:1,rate:250},
+  {role:"Mason / Bricklayer",days:45,workers:4,rate:140},
+  {role:"Steel Fixer",days:20,workers:2,rate:150},
+  {role:"Carpenter",days:25,workers:2,rate:130},
+  {role:"Plumber",days:15,workers:1,rate:160},
+  {role:"Electrician",days:15,workers:1,rate:170},
+  {role:"Tiler",days:12,workers:2,rate:130},
+  {role:"Painter",days:10,workers:2,rate:120},
+  {role:"Roofer",days:8,workers:3,rate:140},
+  {role:"General Labourer",days:45,workers:6,rate:80},
+  {role:"Watchman / Security",days:60,workers:1,rate:70},
+  {role:"Truck Driver",days:10,workers:1,rate:200},
+];
+
+const STAGE_COLORS=["#4c7fc9","#4caf82","#c9a84c","#c9844c","#9b4cc9","#e05a5a","#4cc9c4","#c94c9b"];
+
+let _n=Date.now();
+const uid=()=>String(++_n);
+const sf=v=>{const n=parseFloat(v);return isNaN(n)?0:n;};
+const fmtN=n=>Number(n).toLocaleString("en-GH",{minimumFractionDigits:2,maximumFractionDigits:2});
+const money=(n,s)=>`${s} ${fmtN(n)}`;
+const pad=(s,w)=>String(s).padEnd(w);
+const padL=(s,w)=>String(s).padStart(w);
+const today=()=>new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
+const isoDate=()=>new Date().toISOString().slice(0,10);
+
+const INP={background:NAVY,border:`1px solid ${BORDER}`,borderRadius:2,color:WHITE,fontFamily:"Courier New,monospace",fontSize:13,padding:"8px 10px",width:"100%",outline:"none"};
+const SEL={...INP,cursor:"pointer",appearance:"none"};
+const BTN_P={background:GOLD,color:NAVY,border:"none",fontFamily:"Courier New,monospace",fontSize:12,letterSpacing:"0.18em",textTransform:"uppercase",padding:"12px 22px",borderRadius:2,cursor:"pointer",fontWeight:700};
+const BTN_S={background:"none",border:`1px solid ${BORDER}`,color:MUTED,fontFamily:"Courier New,monospace",fontSize:11,letterSpacing:"0.15em",textTransform:"uppercase",padding:"11px 16px",borderRadius:2,cursor:"pointer"};
+const BTN_A={background:"none",border:`1px dashed rgba(201,168,76,0.3)`,color:GOLD_D,fontFamily:"Courier New,monospace",fontSize:11,letterSpacing:"0.15em",textTransform:"uppercase",padding:"9px 18px",borderRadius:2,cursor:"pointer",marginTop:8};
+
+function Sec({title,children}){return(
+  <div style={{background:NAVY_M,border:`1px solid ${BORDER}`,borderRadius:4,padding:"22px 24px",marginBottom:14,position:"relative",overflow:"hidden"}}>
+    <div style={{position:"absolute",top:0,left:0,width:4,height:"100%",background:`linear-gradient(180deg,${GOLD},transparent)`}}/>
+    {title&&<div style={{fontFamily:"Courier New,monospace",fontSize:10,letterSpacing:"0.25em",textTransform:"uppercase",color:GOLD,marginBottom:14,display:"flex",alignItems:"center",gap:10}}>
+      {title}<div style={{flex:1,height:1,background:BORDER}}/></div>}
+    {children}
+  </div>
+);}
+
+function SumBox({label,val,accent,color}){return(
+  <div style={{background:NAVY,border:`1px solid ${accent?GOLD:BORDER}`,borderRadius:3,padding:"12px 15px",flex:"1 1 110px"}}>
+    <div style={{fontFamily:"Courier New",fontSize:9,letterSpacing:"0.2em",textTransform:"uppercase",color:MUTED,marginBottom:3}}>{label}</div>
+    <div style={{fontFamily:"Georgia,serif",fontSize:accent?17:13,fontWeight:700,color:accent?GOLD_L:(color||WHITE)}}>{val}</div>
+  </div>
+);}
+
+function DelBtn({onClick}){return <button onClick={onClick} style={{background:"none",border:`1px solid rgba(224,90,90,0.3)`,color:DANGER,width:28,height:28,borderRadius:2,cursor:"pointer",fontSize:15,lineHeight:1}}>×</button>;}
+
+function Label({children}){return <label style={{fontFamily:"Courier New",fontSize:10,letterSpacing:"0.15em",textTransform:"uppercase",color:MUTED,display:"block",marginBottom:5}}>{children}</label>;}
+function Field({label,children,style}){return <div style={{display:"flex",flexDirection:"column",...style}}><Label>{label}</Label>{children}</div>;}
+
+function MobileModal({content,onClose,title}){
+  const [copied,setCopied]=useState(false);
+  const doCopy=()=>{navigator.clipboard.writeText(content).then(()=>setCopied(true)).catch(()=>{try{const el=document.getElementById("_mta");el.select();document.execCommand("copy");setCopied(true);}catch(e){}});};
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(10,22,40,0.97)",zIndex:9999,display:"flex",flexDirection:"column",padding:20,gap:12}}>
+      <div style={{fontFamily:"Courier New",fontSize:11,letterSpacing:"0.2em",textTransform:"uppercase",color:GOLD}}>⎙ {title||"Export"}</div>
+      <div style={{fontSize:13,color:MUTED,lineHeight:1.5}}>Tap <strong style={{color:WHITE}}>Copy</strong> then paste into Notes, WhatsApp, or Email.</div>
+      <textarea id="_mta" readOnly value={content} style={{flex:1,background:NAVY_M,color:WHITE,border:`1px solid ${BORDER}`,borderRadius:3,fontFamily:"Courier New",fontSize:11,padding:12,resize:"none",outline:"none",lineHeight:1.6}}/>
+      <div style={{display:"flex",gap:10}}><button onClick={doCopy} style={{...BTN_P,flex:1}}>⧉ Copy</button><button onClick={onClose} style={BTN_S}>Close</button></div>
+      {copied&&<div style={{fontFamily:"Courier New",fontSize:11,color:OK,textAlign:"center"}}>✓ Copied!</div>}
+    </div>
+  );
+}
+
+function downloadOrModal(content,filename,setModal){
+  try{
+    const blob=new Blob([content],{type:"text/plain"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");a.href=url;a.download=filename;a.click();URL.revokeObjectURL(url);
+  }catch(e){setModal(content);}
+}
+function printHTML(html){const w=window.open("","_blank");if(!w)return;w.document.write(html);w.document.close();w.focus();setTimeout(()=>w.print(),500);}
+
+function BarChart({data,sym}){
+  if(!data||!data.length)return null;
+  const max=Math.max(...data.map(d=>d.val),1);
+  return(
+    <div style={{marginTop:16}}>
+      {data.map(({label,val,color})=>(
+        <div key={label} style={{marginBottom:10}}>
+          <div style={{display:"flex",justifyContent:"space-between",fontFamily:"Courier New",fontSize:11,marginBottom:4}}>
+            <span style={{color:MUTED}}>{label}</span><span style={{color:WHITE}}>{money(val,sym)}</span>
+          </div>
+          <div style={{background:NAVY,borderRadius:2,height:10,overflow:"hidden"}}>
+            <div style={{height:"100%",width:`${(val/max)*100}%`,background:color,borderRadius:2,transition:"width 0.6s ease"}}/>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ── COST ESTIMATOR ── */
+function CostEstimator({sym,projName,client,loc,ptype,onSave,savedData}){
+  const [oh,setOh]=useState("10");
+  const [con,setCon]=useState("5");
+  const [vat,setVat]=useState("0");
+  const [mats,setMats]=useState([]);
+  const [labs,setLabs]=useState([]);
+  const [modal,setModal]=useState(null);
+  const [dbOpen,setDbOpen]=useState(false);
+  const [dbCat,setDbCat]=useState("All");
+  const [dbSearch,setDbSearch]=useState("");
+  const [labTplOpen,setLabTplOpen]=useState(false);
+  const [saveMsg,setSaveMsg]=useState("");
+
+  useEffect(()=>{
+    if(savedData&&(savedData.mats||savedData.labs)){
+      setMats(savedData.mats||[]);setLabs(savedData.labs||[]);
+      setOh(savedData.oh||"10");setCon(savedData.con||"5");setVat(savedData.vat||"0");
+    } else {
+      setMats([{id:uid(),item:"Cement (bags)",qty:100,unit:"bags",rate:85},{id:uid(),item:"Sand (tons)",qty:20,unit:"tons",rate:250},{id:uid(),item:"Gravel (tons)",qty:15,unit:"tons",rate:300},{id:uid(),item:"Reinforcement bars",qty:500,unit:"kg",rate:12}]);
+      setLabs([{id:uid(),role:"Mason",days:30,workers:4,rate:120},{id:uid(),role:"General Labourer",days:30,workers:6,rate:70}]);
+    }
+  },[]);
+
+  const matTotal=mats.reduce((s,r)=>s+sf(r.qty)*sf(r.rate),0);
+  const labTotal=labs.reduce((s,r)=>s+sf(r.days)*sf(r.workers)*sf(r.rate),0);
+  const direct=matTotal+labTotal,ohAmt=direct*sf(oh)/100,conAmt=(direct+ohAmt)*sf(con)/100;
+  const sub=direct+ohAmt+conAmt,vatAmt=sub*sf(vat)/100,total=sub+vatAmt;
+
+  const cats=["All",...new Set(GH_PRICES.map(p=>p.cat))];
+  const filteredDb=GH_PRICES.filter(p=>(dbCat==="All"||p.cat===dbCat)&&(p.item.toLowerCase().includes(dbSearch.toLowerCase())||p.cat.toLowerCase().includes(dbSearch.toLowerCase())));
+
+  const handleSave=()=>{onSave({mats,labs,oh,con,vat});setSaveMsg("✓ Saved!");setTimeout(()=>setSaveMsg(""),2000);};
+
+  const W=64,line_="=".repeat(W),dash="-".repeat(W);
+  const buildTxt=()=>{
+    const ls=[line_,"  TUOBUILDS CONSULT — PROJECT COST ESTIMATE",line_,`  Project  : ${projName||"Unnamed Project"}`,...(client?[`  Client   : ${client}`]:[]),...(loc?[`  Location : ${loc}`]:[]),`  Type     : ${ptype}`,`  Date     : ${today()}`,dash,"","  MATERIALS",`  ${pad("Item",28)} ${pad("Qty",8)} ${pad("Unit",7)} ${padL("Rate",12)}  ${padL("Total",12)}`,"  "+"-".repeat(W-2)];
+    mats.forEach(r=>{const t=sf(r.qty)*sf(r.rate);ls.push(`  ${pad(r.item,28)} ${pad(r.qty,8)} ${pad(r.unit,7)} ${padL(sym+" "+fmtN(r.rate),12)}  ${padL(sym+" "+fmtN(t),12)}`);});
+    ls.push(`  ${pad("Subtotal",45)} ${padL(sym+" "+fmtN(matTotal),14)}`,"","  LABOUR",`  ${pad("Role",22)} ${pad("Days",6)} ${pad("Workers",9)} ${padL("Day Rate",12)}  ${padL("Total",12)}`,"  "+"-".repeat(W-2));
+    labs.forEach(r=>{const t=sf(r.days)*sf(r.workers)*sf(r.rate);ls.push(`  ${pad(r.role,22)} ${pad(r.days,6)} ${pad(r.workers,9)} ${padL(sym+" "+fmtN(r.rate),12)}  ${padL(sym+" "+fmtN(t),12)}`);});
+    ls.push(`  ${pad("Subtotal",45)} ${padL(sym+" "+fmtN(labTotal),14)}`,"",line_,"  COST BREAKDOWN",dash,`  ${pad("Direct Cost",45)} ${padL(sym+" "+fmtN(direct),14)}`,`  ${pad(`Overhead (${sf(oh).toFixed(1)}%)`,45)} ${padL(sym+" "+fmtN(ohAmt),14)}`,`  ${pad(`Contingency (${sf(con).toFixed(1)}%)`,45)} ${padL(sym+" "+fmtN(conAmt),14)}`,...(vatAmt>0?[`  ${pad(`VAT/Tax (${sf(vat).toFixed(1)}%)`,45)} ${padL(sym+" "+fmtN(vatAmt),14)}`]:[]),line_,`  ${pad("TOTAL ESTIMATED COST",45)} ${padL(sym+" "+fmtN(total),14)}`,line_,"","  TuoBuilds Consult | Civil & Structural Engineering");
+    return ls.join("\n");
+  };
+
+  const buildPrintHTML=()=>{
+    const chartBars=[{label:"Materials",val:matTotal,color:BLUE},{label:"Labour",val:labTotal,color:OK},{label:"Overhead",val:ohAmt,color:ORANGE},{label:"Contingency",val:conAmt,color:GOLD},...(vatAmt>0?[{label:"VAT/Tax",val:vatAmt,color:PURPLE}]:[])];
+    const maxB=Math.max(...chartBars.map(d=>d.val),1);
+    const barsHTML=chartBars.map(d=>`<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px"><span style="color:#555">${d.label}</span><span>${sym} ${fmtN(d.val)}</span></div><div style="background:#e5e7eb;height:12px;border-radius:3px;overflow:hidden"><div style="height:100%;width:${(d.val/maxB)*100}%;background:${d.color};border-radius:3px"></div></div></div>`).join("");
+    return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Cost Estimate — ${projName||"Project"}</title><style>body{font-family:Arial,sans-serif;padding:32px;color:#111;margin:0}.hdr{border-bottom:3px solid #c9a84c;padding-bottom:16px;margin-bottom:24px}.co{font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:#c9a84c;font-weight:700}h1{font-size:22px;color:#0a1628;margin:6px 0}.meta{font-size:12px;color:#6b7280;margin-top:6px}table{width:100%;border-collapse:collapse;margin-bottom:20px}th{background:#0a1628;color:#c9a84c;padding:9px 10px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;text-align:left}td{padding:8px 10px;border-bottom:1px solid #e5e7eb;font-size:13px}tr:nth-child(even)td{background:#f9fafb}.stotal td{font-weight:700;background:#f3f4f6}.grand{background:#0a1628!important;color:#e8c97a;font-weight:700;font-size:14px}.section-hdr{font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:#374151;padding:10px;background:#f3f4f6;border-top:2px solid #c9a84c}.two-col{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:20px}.box{border:1px solid #e5e7eb;padding:16px;border-radius:4px}.box-title{font-size:11px;text-transform:uppercase;letter-spacing:.15em;color:#c9a84c;margin-bottom:10px;font-weight:700}.footer{margin-top:32px;font-size:11px;color:#9ca3af;text-align:center;border-top:1px solid #e5e7eb;padding-top:14px}@media print{body{padding:15px}}</style></head><body>
+    <div class="hdr"><div class="co">TuoBuilds Consult</div><h1>Cost Estimate Report</h1><div class="meta"><strong>${projName||"Unnamed Project"}</strong>${client?" · "+client:""}${loc?" · "+loc:""} · ${ptype} · ${today()}</div></div>
+    <table><thead><tr><th>Item</th><th>Qty</th><th>Unit</th><th style="text-align:right">Rate (${sym})</th><th style="text-align:right">Total (${sym})</th></tr></thead><tbody>
+    <tr><td colspan="5" class="section-hdr">Materials</td></tr>${mats.map(r=>`<tr><td>${r.item}</td><td>${r.qty}</td><td>${r.unit}</td><td style="text-align:right;font-family:monospace">${fmtN(sf(r.rate))}</td><td style="text-align:right;font-family:monospace">${fmtN(sf(r.qty)*sf(r.rate))}</td></tr>`).join("")}
+    <tr class="stotal"><td colspan="4" style="text-align:right">Materials Subtotal</td><td style="text-align:right;font-family:monospace">${fmtN(matTotal)}</td></tr>
+    <tr><td colspan="5" class="section-hdr">Labour</td></tr>${labs.map(r=>`<tr><td>${r.role}</td><td>${r.days}d × ${r.workers}w</td><td>—</td><td style="text-align:right;font-family:monospace">${fmtN(sf(r.rate))}/day</td><td style="text-align:right;font-family:monospace">${fmtN(sf(r.days)*sf(r.workers)*sf(r.rate))}</td></tr>`).join("")}
+    <tr class="stotal"><td colspan="4" style="text-align:right">Labour Subtotal</td><td style="text-align:right;font-family:monospace">${fmtN(labTotal)}</td></tr>
+    <tr><td colspan="4">Overhead (${sf(oh).toFixed(1)}%)</td><td style="text-align:right;font-family:monospace">${fmtN(ohAmt)}</td></tr>
+    <tr><td colspan="4">Contingency (${sf(con).toFixed(1)}%)</td><td style="text-align:right;font-family:monospace">${fmtN(conAmt)}</td></tr>
+    ${vatAmt>0?`<tr><td colspan="4">VAT/Tax (${sf(vat).toFixed(1)}%)</td><td style="text-align:right;font-family:monospace">${fmtN(vatAmt)}</td></tr>`:""}
+    <tr><td colspan="4" class="grand" style="text-align:right">TOTAL ESTIMATED COST</td><td class="grand" style="text-align:right;font-family:monospace">${sym} ${fmtN(total)}</td></tr>
+    </tbody></table>
+    <div class="two-col"><div class="box"><div class="box-title">Cost Breakdown Chart</div>${barsHTML}</div>
+    <div class="box"><div class="box-title">Summary</div>${[["Materials",matTotal,BLUE],["Labour",labTotal,OK],["Overhead",ohAmt,ORANGE],["Contingency",conAmt,GOLD],...(vatAmt>0?[["VAT/Tax",vatAmt,PURPLE]]:[]),["TOTAL",total,GOLD]].map(([l,v,c])=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f0f0f0"><span style="font-size:12px;color:#555">${l}</span><span style="font-family:monospace;font-size:12px;font-weight:${l==="TOTAL"?700:400};color:${l==="TOTAL"?"#c9a84c":"#111"}">${sym} ${fmtN(v)}</span></div>`).join("")}</div></div>
+    <div class="footer">TuoBuilds Consult | Civil & Structural Engineering | Generated ${today()}</div></body></html>`;
+  };
+
+  const TH={fontFamily:"Courier New,monospace",fontSize:10,letterSpacing:"0.18em",textTransform:"uppercase",color:GOLD_D,padding:"0 6px 8px",textAlign:"left",borderBottom:`1px solid ${BORDER}`};
+  const TD={padding:"5px 6px",verticalAlign:"middle"};
+  const RB={borderBottom:`1px solid rgba(201,168,76,0.07)`};
+  const chartData=[{label:"Materials",val:matTotal,color:BLUE},{label:"Labour",val:labTotal,color:OK},{label:"Overhead",val:ohAmt,color:ORANGE},{label:"Contingency",val:conAmt,color:GOLD},...(vatAmt>0?[{label:"VAT/Tax",val:vatAmt,color:PURPLE}]:[])];
+
+  return(
+    <div>
+      {dbOpen&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(10,22,40,0.96)",zIndex:900,display:"flex",flexDirection:"column",padding:20,gap:12}}>
+          <div style={{fontFamily:"Courier New",fontSize:11,letterSpacing:"0.2em",textTransform:"uppercase",color:GOLD}}>📦 Ghana Material Price Database</div>
+          <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+            <input style={{...INP,flex:1,minWidth:160}} value={dbSearch} placeholder="Search items..." onChange={e=>setDbSearch(e.target.value)}/>
+            <select style={{...SEL,width:180}} value={dbCat} onChange={e=>setDbCat(e.target.value)}>{cats.map(c=><option key={c}>{c}</option>)}</select>
+            <button onClick={()=>setDbOpen(false)} style={BTN_S}>Close</button>
+          </div>
+          <div style={{flex:1,overflowY:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse"}}>
+              <thead><tr><th style={{...TH,position:"sticky",top:0,background:NAVY_M}}>Item</th><th style={{...TH,width:70,position:"sticky",top:0,background:NAVY_M}}>Unit</th><th style={{...TH,width:100,position:"sticky",top:0,background:NAVY_M,textAlign:"right"}}>Rate (GHS)</th><th style={{...TH,width:80,position:"sticky",top:0,background:NAVY_M}}/></tr></thead>
+              <tbody>{filteredDb.map((p,i)=>(
+                <tr key={i} style={RB}>
+                  <td style={TD}><div style={{fontFamily:"Courier New",fontSize:12,color:WHITE}}>{p.item}</div><div style={{fontSize:10,color:MUTED}}>{p.cat}{p.note?" · "+p.note:""}</div></td>
+                  <td style={{...TD,fontFamily:"Courier New",fontSize:11,color:MUTED}}>{p.unit}</td>
+                  <td style={{...TD,fontFamily:"Courier New",fontSize:12,color:GOLD_L,textAlign:"right"}}>{fmtN(p.rate)}</td>
+                  <td style={TD}><button onClick={()=>setMats(rs=>[...rs,{id:uid(),item:p.item,qty:1,unit:p.unit,rate:p.rate}])} style={{...BTN_P,padding:"6px 12px",fontSize:10}}>＋ Add</button></td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {labTplOpen&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(10,22,40,0.96)",zIndex:900,display:"flex",flexDirection:"column",padding:20,gap:12}}>
+          <div style={{fontFamily:"Courier New",fontSize:11,letterSpacing:"0.2em",textTransform:"uppercase",color:GOLD}}>👷 Labour Templates</div>
+          <div style={{flex:1,overflowY:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse"}}>
+              <thead><tr><th style={TH}>Trade / Role</th><th style={{...TH,width:55}}>Days</th><th style={{...TH,width:70}}>Workers</th><th style={{...TH,width:95,textAlign:"right"}}>Rate/Day</th><th style={{...TH,width:80}}/></tr></thead>
+              <tbody>{LABOUR_TEMPLATES.map((t,i)=>(
+                <tr key={i} style={RB}>
+                  <td style={{...TD,fontFamily:"Courier New",fontSize:12,color:WHITE}}>{t.role}</td>
+                  <td style={{...TD,fontFamily:"Courier New",fontSize:11,color:MUTED}}>{t.days}</td>
+                  <td style={{...TD,fontFamily:"Courier New",fontSize:11,color:MUTED}}>{t.workers}</td>
+                  <td style={{...TD,fontFamily:"Courier New",fontSize:12,color:GOLD_L,textAlign:"right"}}>{sym} {fmtN(t.rate)}</td>
+                  <td style={TD}><button onClick={()=>setLabs(rs=>[...rs,{id:uid(),...t}])} style={{...BTN_P,padding:"6px 12px",fontSize:10}}>＋ Add</button></td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+          <button onClick={()=>setLabTplOpen(false)} style={BTN_S}>Close</button>
+        </div>
+      )}
+
+      <Sec title="Materials">
+        <div style={{display:"flex",gap:8,marginBottom:10}}><button style={{...BTN_S,borderColor:GOLD,color:GOLD}} onClick={()=>setDbOpen(true)}>📦 Browse Ghana Price DB</button></div>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",minWidth:440}}>
+            <thead><tr><th style={TH}>Item</th><th style={{...TH,width:65}}>Qty</th><th style={{...TH,width:80}}>Unit</th><th style={{...TH,width:100}}>Rate ({sym})</th><th style={{...TH,width:105,textAlign:"right"}}>Total</th><th style={{...TH,width:30}}/></tr></thead>
+            <tbody>{mats.map(row=>{const t=sf(row.qty)*sf(row.rate);return(
+              <tr key={row.id} style={RB}>
+                <td style={TD}><input style={INP} value={row.item} placeholder="Item" onChange={e=>setMats(rs=>rs.map(r=>r.id===row.id?{...r,item:e.target.value}:r))}/></td>
+                <td style={TD}><input style={INP} type="number" value={row.qty} min={0} onChange={e=>setMats(rs=>rs.map(r=>r.id===row.id?{...r,qty:e.target.value}:r))}/></td>
+                <td style={TD}><select style={SEL} value={row.unit} onChange={e=>setMats(rs=>rs.map(r=>r.id===row.id?{...r,unit:e.target.value}:r))}>{UNITS.map(u=><option key={u}>{u}</option>)}</select></td>
+                <td style={TD}><input style={INP} type="number" value={row.rate} min={0} onChange={e=>setMats(rs=>rs.map(r=>r.id===row.id?{...r,rate:e.target.value}:r))}/></td>
+                <td style={{...TD,fontFamily:"Courier New",fontSize:12,color:GOLD_L,textAlign:"right",whiteSpace:"nowrap"}}>{money(t,sym)}</td>
+                <td style={TD}><DelBtn onClick={()=>setMats(rs=>rs.filter(r=>r.id!==row.id))}/></td>
+              </tr>
+            );})}</tbody>
+          </table>
+        </div>
+        <button style={BTN_A} onClick={()=>setMats(rs=>[...rs,{id:uid(),item:"",qty:1,unit:"bags",rate:0}])}>＋ Add Row</button>
+      </Sec>
+
+      <Sec title="Labour">
+        <div style={{display:"flex",gap:8,marginBottom:10}}><button style={{...BTN_S,borderColor:GOLD,color:GOLD}} onClick={()=>setLabTplOpen(true)}>👷 Labour Templates</button></div>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",minWidth:440}}>
+            <thead><tr><th style={TH}>Role / Trade</th><th style={{...TH,width:55}}>Days</th><th style={{...TH,width:68}}>Workers</th><th style={{...TH,width:100}}>Rate ({sym})</th><th style={{...TH,width:105,textAlign:"right"}}>Total</th><th style={{...TH,width:30}}/></tr></thead>
+            <tbody>{labs.map(row=>{const t=sf(row.days)*sf(row.workers)*sf(row.rate);return(
+              <tr key={row.id} style={RB}>
+                <td style={TD}><input style={INP} value={row.role} placeholder="e.g. Mason" onChange={e=>setLabs(rs=>rs.map(r=>r.id===row.id?{...r,role:e.target.value}:r))}/></td>
+                <td style={TD}><input style={INP} type="number" value={row.days} min={0} onChange={e=>setLabs(rs=>rs.map(r=>r.id===row.id?{...r,days:e.target.value}:r))}/></td>
+                <td style={TD}><input style={INP} type="number" value={row.workers} min={1} onChange={e=>setLabs(rs=>rs.map(r=>r.id===row.id?{...r,workers:e.target.value}:r))}/></td>
+                <td style={TD}><input style={INP} type="number" value={row.rate} min={0} onChange={e=>setLabs(rs=>rs.map(r=>r.id===row.id?{...r,rate:e.target.value}:r))}/></td>
+                <td style={{...TD,fontFamily:"Courier New",fontSize:12,color:GOLD_L,textAlign:"right",whiteSpace:"nowrap"}}>{money(t,sym)}</td>
+                <td style={TD}><DelBtn onClick={()=>setLabs(rs=>rs.filter(r=>r.id!==row.id))}/></td>
+              </tr>
+            );})}</tbody>
+          </table>
+        </div>
+        <button style={BTN_A} onClick={()=>setLabs(rs=>[...rs,{id:uid(),role:"",days:1,workers:1,rate:0}])}>＋ Add Row</button>
+      </Sec>
+
+      <Sec title="Overhead & Margins">
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14}}>
+          {[["Overhead (%)",oh,setOh],["Contingency (%)",con,setCon],["VAT / Tax (%)",vat,setVat]].map(([l,v,s])=>(
+            <Field key={l} label={l}><input style={INP} type="number" value={v} min={0} onChange={e=>s(e.target.value)}/></Field>
+          ))}
+        </div>
+      </Sec>
+
+      <Sec title="Live Summary & Chart">
+        <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:14}}>
+          <SumBox label="Materials" val={money(matTotal,sym)}/><SumBox label="Labour" val={money(labTotal,sym)}/><SumBox label="Direct" val={money(direct,sym)}/><SumBox label="Est. Total" val={money(total,sym)} accent/>
+        </div>
+        <BarChart data={chartData} sym={sym}/>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:16}}>
+          <button style={BTN_P} onClick={()=>printHTML(buildPrintHTML())}>🖨 Print / PDF Report</button>
+          <button style={BTN_S} onClick={()=>downloadOrModal(buildTxt(),`estimate_${(projName||"project").replace(/[^a-z0-9]/gi,"_").toLowerCase()}_${isoDate()}.txt`,setModal)}>⎙ Export .txt</button>
+          <button style={BTN_S} onClick={handleSave}>💾 Save</button>
+          {saveMsg&&<span style={{fontFamily:"Courier New",fontSize:11,color:OK,alignSelf:"center"}}>{saveMsg}</span>}
+          <button style={BTN_S} onClick={()=>{if(window.confirm("Clear all?")){{setMats([]);setLabs([])}}}}>✕ Clear</button>
+        </div>
+      </Sec>
+      {modal&&<MobileModal content={modal} onClose={()=>setModal(null)} title="Cost Estimate"/>}
+    </div>
+  );
+}
+
+/* ── BOQ GENERATOR ── */
+function BOQGenerator({sym,projName,client,loc,ptype,onSave,savedData}){
+  const [items,setItems]=useState([]);
+  const [modal,setModal]=useState(null);
+  const [saveMsg,setSaveMsg]=useState("");
+
+  useEffect(()=>{if(savedData&&savedData.items)setItems(savedData.items);},[]);
+
+  const grandTotal=items.reduce((s,r)=>s+sf(r.qty)*sf(r.rate),0);
+  const grouped=BOQ_SECTIONS.reduce((acc,sec)=>{const rows=items.filter(i=>i.section===sec);if(rows.length)acc[sec]=rows;return acc;},{});
+
+  const handleSave=()=>{onSave({items});setSaveMsg("✓ Saved!");setTimeout(()=>setSaveMsg(""),2000);};
+
+  const buildTxt=()=>{
+    const W=72,line_="=".repeat(W),dash="-".repeat(W);
+    const ls=[line_,"  TUOBUILDS CONSULT — BILL OF QUANTITIES (BOQ)",line_,`  Project  : ${projName||"Unnamed Project"}`,...(client?[`  Client   : ${client}`]:[]),...(loc?[`  Location : ${loc}`]:[]),`  Type     : ${ptype}`,`  Currency : ${sym}`,`  Date     : ${today()}`,dash];
+    let n=1;
+    Object.entries(grouped).forEach(([sec,rows])=>{
+      ls.push("",`  ${sec.toUpperCase()}`,`  ${pad("No.",4)} ${pad("Description",32)} ${pad("Qty",8)} ${pad("Unit",8)} ${padL("Rate",10)}  ${padL("Amount",12)}`,"  "+"-".repeat(W-2));
+      let st=0;rows.forEach(r=>{const t=sf(r.qty)*sf(r.rate);st+=t;ls.push(`  ${pad(n+".",4)} ${pad(r.description||"—",32)} ${pad(r.qty,8)} ${pad(r.unit,8)} ${padL(fmtN(r.rate),10)}  ${padL(fmtN(t),12)}`);if(r.notes)ls.push(`       Note: ${r.notes}`);n++;});
+      ls.push(`  ${pad("Section Total",52)} ${padL(sym+" "+fmtN(st),14)}`);
+    });
+    ls.push("",line_,`  ${pad("GRAND TOTAL",52)} ${padL(sym+" "+fmtN(grandTotal),14)}`,line_,"","  TuoBuilds Consult | Civil & Structural Engineering");
+    return ls.join("\n");
+  };
+
+  const buildHTML=()=>{
+    let n=1;
+    const sectHTML=Object.entries(grouped).map(([sec,rows])=>{
+      let st=0;
+      const rHTML=rows.map(r=>{const t=sf(r.qty)*sf(r.rate);st+=t;return `<tr><td style="padding:8px 10px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#374151">${n++}</td><td style="padding:8px 10px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#111">${r.description||"—"}${r.notes?`<div style="font-size:11px;color:#6b7280;margin-top:2px">Note: ${r.notes}</div>`:""}</td><td style="padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:center;font-size:13px">${r.qty}</td><td style="padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:center;font-size:13px">${r.unit}</td><td style="padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:right;font-family:monospace;font-size:13px">${fmtN(sf(r.rate))}</td><td style="padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:right;font-family:monospace;font-size:13px;font-weight:600">${fmtN(t)}</td></tr>`;}).join("");
+      return `<tr><td colspan="6" style="padding:10px;background:#f3f4f6;font-weight:700;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#374151;border-top:2px solid #c9a84c">${sec}</td></tr>${rHTML}<tr><td colspan="5" style="padding:8px 10px;text-align:right;font-size:12px;color:#6b7280;font-style:italic">Section Total:</td><td style="padding:8px 10px;text-align:right;font-family:monospace;font-weight:700;color:#c9a84c">${sym} ${fmtN(st)}</td></tr>`;
+    }).join("");
+    return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>BOQ — ${projName||"Project"}</title><style>body{font-family:Arial,sans-serif;padding:30px;color:#111;margin:0}.hdr{border-bottom:3px solid #c9a84c;padding-bottom:16px;margin-bottom:24px}.co{font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:#c9a84c;font-weight:700}h1{font-size:22px;color:#0a1628;margin:6px 0}.meta{font-size:12px;color:#6b7280;margin-top:6px}table{width:100%;border-collapse:collapse}th{background:#0a1628;color:#c9a84c;padding:10px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;text-align:left}.grand{background:#0a1628;color:#e8c97a;padding:12px 10px;font-weight:700;font-size:15px}.footer{margin-top:30px;font-size:11px;color:#9ca3af;text-align:center}@media print{body{padding:15px}}</style></head><body><div class="hdr"><div class="co">TuoBuilds Consult</div><h1>Bill of Quantities</h1><div class="meta"><strong>${projName||"Unnamed Project"}</strong>${client?" · "+client:""}${loc?" · "+loc:""} · ${ptype} · ${today()}</div></div><table><thead><tr><th style="width:40px">No.</th><th>Description</th><th style="width:60px;text-align:center">Qty</th><th style="width:60px;text-align:center">Unit</th><th style="width:100px;text-align:right">Rate (${sym})</th><th style="width:110px;text-align:right">Amount (${sym})</th></tr></thead><tbody>${sectHTML}<tr><td colspan="5" class="grand" style="text-align:right">GRAND TOTAL</td><td class="grand" style="text-align:right;font-family:monospace">${sym} ${fmtN(grandTotal)}</td></tr></tbody></table><div class="footer">TuoBuilds Consult | Civil & Structural Engineering | ${today()}</div></body></html>`;
+  };
+
+  const TH={fontFamily:"Courier New,monospace",fontSize:10,letterSpacing:"0.18em",textTransform:"uppercase",color:GOLD_D,padding:"0 6px 8px",textAlign:"left",borderBottom:`1px solid ${BORDER}`};
+  const TD={padding:"5px 6px",verticalAlign:"middle"};
+
+  return(
+    <div>
+      <Sec title="BOQ Items">
+        {items.length>0&&(
+          <div style={{overflowX:"auto",marginBottom:10}}>
+            <table style={{width:"100%",borderCollapse:"collapse",minWidth:560}}>
+              <thead><tr><th style={{...TH,width:155}}>Section</th><th style={TH}>Description</th><th style={{...TH,width:58}}>Qty</th><th style={{...TH,width:72}}>Unit</th><th style={{...TH,width:88}}>Rate ({sym})</th><th style={{...TH,width:100,textAlign:"right"}}>Amount</th><th style={{...TH,width:88}}>Notes</th><th style={{...TH,width:30}}/></tr></thead>
+              <tbody>{items.map(row=>{const t=sf(row.qty)*sf(row.rate);return(
+                <tr key={row.id} style={{borderBottom:`1px solid rgba(201,168,76,0.07)`}}>
+                  <td style={TD}><select style={{...SEL,fontSize:11}} value={row.section} onChange={e=>setItems(is=>is.map(i=>i.id===row.id?{...i,section:e.target.value}:i))}>{BOQ_SECTIONS.map(s=><option key={s}>{s}</option>)}</select></td>
+                  <td style={TD}><input style={INP} value={row.description} placeholder="Description" onChange={e=>setItems(is=>is.map(i=>i.id===row.id?{...i,description:e.target.value}:i))}/></td>
+                  <td style={TD}><input style={INP} type="number" value={row.qty} min={0} onChange={e=>setItems(is=>is.map(i=>i.id===row.id?{...i,qty:e.target.value}:i))}/></td>
+                  <td style={TD}><select style={{...SEL,fontSize:11}} value={row.unit} onChange={e=>setItems(is=>is.map(i=>i.id===row.id?{...i,unit:e.target.value}:i))}>{UNITS.map(u=><option key={u}>{u}</option>)}</select></td>
+                  <td style={TD}><input style={INP} type="number" value={row.rate} min={0} onChange={e=>setItems(is=>is.map(i=>i.id===row.id?{...i,rate:e.target.value}:i))}/></td>
+                  <td style={{...TD,fontFamily:"Courier New",fontSize:12,color:GOLD_L,textAlign:"right",whiteSpace:"nowrap"}}>{money(t,sym)}</td>
+                  <td style={TD}><input style={{...INP,fontSize:11}} value={row.notes} placeholder="Optional" onChange={e=>setItems(is=>is.map(i=>i.id===row.id?{...i,notes:e.target.value}:i))}/></td>
+                  <td style={TD}><DelBtn onClick={()=>setItems(is=>is.filter(i=>i.id!==row.id))}/></td>
+                </tr>
+              );})}</tbody>
+            </table>
+          </div>
+        )}
+        <button style={BTN_A} onClick={()=>setItems(is=>[...is,{id:uid(),section:"Substructure / Foundation",description:"",qty:1,unit:"m³",rate:0,notes:""}])}>＋ Add Item</button>
+      </Sec>
+      {items.length>0&&(
+        <Sec title="BOQ Summary & Export">
+          {Object.entries(grouped).map(([sec,rows])=>{const t=rows.reduce((s,r)=>s+sf(r.qty)*sf(r.rate),0);return(
+            <div key={sec} style={{display:"flex",justifyContent:"space-between",padding:"8px 12px",marginBottom:4,background:NAVY,borderRadius:2,borderLeft:`2px solid ${GOLD_D}`}}>
+              <span style={{fontFamily:"Courier New",fontSize:11,color:MUTED}}>{sec}</span>
+              <span style={{fontFamily:"Courier New",fontSize:11,color:WHITE}}>{money(t,sym)}</span>
+            </div>
+          );})}
+          <div style={{display:"flex",justifyContent:"space-between",padding:"12px 14px",marginTop:8,background:"rgba(201,168,76,0.08)",border:`1px solid ${GOLD}`,borderRadius:2}}>
+            <span style={{fontFamily:"Courier New",fontSize:13,color:GOLD,fontWeight:700}}>GRAND TOTAL</span>
+            <span style={{fontFamily:"Courier New",fontSize:14,color:GOLD_L,fontWeight:700}}>{money(grandTotal,sym)}</span>
+          </div>
+          <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:14}}>
+            <button style={BTN_P} onClick={()=>printHTML(buildHTML())}>🖨 Print / PDF BOQ</button>
+            <button style={BTN_S} onClick={()=>downloadOrModal(buildTxt(),`BOQ_${(projName||"project").replace(/[^a-z0-9]/gi,"_").toLowerCase()}_${isoDate()}.txt`,setModal)}>⎙ Export .txt</button>
+            <button style={BTN_S} onClick={handleSave}>💾 Save</button>
+            {saveMsg&&<span style={{fontFamily:"Courier New",fontSize:11,color:OK,alignSelf:"center"}}>{saveMsg}</span>}
+            <button style={BTN_S} onClick={()=>{if(window.confirm("Clear all?"))setItems([]);}}>✕ Clear</button>
+          </div>
+        </Sec>
+      )}
+      {modal&&<MobileModal content={modal} onClose={()=>setModal(null)} title="BOQ Export"/>}
+    </div>
+  );
+}
+
+/* ── INVOICE ── */
+function InvoiceGen({sym,projName,client,loc,ptype}){
+  const [type,setType]=useState("Quotation");
+  const [invNo,setInvNo]=useState(`TBC-${new Date().getFullYear()}-001`);
+  const [issueDate,setIssueDate]=useState(isoDate());
+  const [dueDate,setDueDate]=useState("");
+  const [toName,setToName]=useState(client||"");
+  const [toAddr,setToAddr]=useState(loc||"");
+  const [toEmail,setToEmail]=useState("");
+  const [toPhone,setToPhone]=useState("");
+  const [lines,setLines]=useState([{id:uid(),desc:"",qty:1,unit:"lump sum",rate:0}]);
+  const [discount,setDiscount]=useState("0");
+  const [vatP,setVatP]=useState("0");
+  const [notes,setNotes]=useState("Payment terms: 50% advance, balance on completion.");
+
+  useEffect(()=>{setToName(client||"");setToAddr(loc||"");},[client,loc]);
+
+  const sub=lines.reduce((s,r)=>s+sf(r.qty)*sf(r.rate),0);
+  const discAmt=sub*sf(discount)/100,aft=sub-discAmt,vatAmt=aft*sf(vatP)/100,total=aft+vatAmt;
+
+  const buildHTML=()=>{
+    const linesHTML=lines.map((r,i)=>{const t=sf(r.qty)*sf(r.rate);return`<tr><td style="padding:9px 10px;border-bottom:1px solid #e5e7eb;font-size:13px">${i+1}</td><td style="padding:9px 10px;border-bottom:1px solid #e5e7eb;font-size:13px">${r.desc||"—"}</td><td style="padding:9px 10px;border-bottom:1px solid #e5e7eb;text-align:center;font-size:13px">${r.qty}</td><td style="padding:9px 10px;border-bottom:1px solid #e5e7eb;text-align:center;font-size:13px">${r.unit}</td><td style="padding:9px 10px;border-bottom:1px solid #e5e7eb;text-align:right;font-family:monospace;font-size:13px">${fmtN(sf(r.rate))}</td><td style="padding:9px 10px;border-bottom:1px solid #e5e7eb;text-align:right;font-family:monospace;font-size:13px;font-weight:600">${fmtN(t)}</td></tr>`;}).join("");
+    return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${type} ${invNo}</title><style>body{font-family:Arial,sans-serif;padding:36px;color:#111;margin:0;max-width:800px;margin:0 auto}.top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px}.co-name{font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:#c9a84c;font-weight:700;margin-bottom:4px}.co-title{font-size:28px;font-weight:900;color:#0a1628;font-family:Georgia,serif}.inv-type{font-size:28px;font-weight:700;color:#c9a84c;text-align:right}.inv-no{font-size:13px;color:#6b7280;text-align:right;margin-top:4px}.parties{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px;padding:16px;background:#f9fafb;border-radius:4px}.party-lbl{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:#c9a84c;font-weight:700;margin-bottom:6px}.party-name{font-size:14px;font-weight:700;color:#111;margin-bottom:3px}.party-info{font-size:12px;color:#6b7280;line-height:1.6}table{width:100%;border-collapse:collapse;margin-bottom:0}th{background:#0a1628;color:#c9a84c;padding:10px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;text-align:left}.totals{margin-top:0;display:flex;justify-content:flex-end}.totals-box{width:300px;border:1px solid #e5e7eb;border-radius:4px;overflow:hidden}.t-row{display:flex;justify-content:space-between;padding:9px 14px;border-bottom:1px solid #f0f0f0;font-size:13px}.t-total{display:flex;justify-content:space-between;padding:12px 14px;background:#0a1628;font-size:15px;font-weight:700;color:#e8c97a}.notes-box{margin-top:20px;padding:14px;background:#f9fafb;border-radius:4px;font-size:12px;color:#555;line-height:1.7}.notes-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:#c9a84c;font-weight:700;margin-bottom:6px}.footer{margin-top:28px;padding-top:14px;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af;text-align:center}@media print{body{padding:15px}}</style></head><body>
+    <div class="top"><div><div class="co-name">TuoBuilds Consult</div><div class="co-title">TuoBuilds</div><div style="font-size:11px;color:#6b7280;margin-top:4px">Civil & Structural Engineering · Kumasi, Ghana</div></div><div><div class="inv-type">${type}</div><div class="inv-no">${invNo}</div><div style="font-size:12px;color:#6b7280;text-align:right;margin-top:4px">Issued: ${issueDate}${dueDate?" · Due: "+dueDate:""}</div></div></div>
+    <div class="parties"><div><div class="party-lbl">From</div><div class="party-name">TuoBuilds Consult</div><div class="party-info">Kumasi, Ashanti Region<br>Ghana</div></div><div><div class="party-lbl">Bill To</div><div class="party-name">${toName||"Client Name"}</div><div class="party-info">${toAddr||""}${toEmail?"<br>"+toEmail:""}${toPhone?"<br>"+toPhone:""}</div></div></div>
+    <table><thead><tr><th style="width:36px">No.</th><th>Description</th><th style="width:55px;text-align:center">Qty</th><th style="width:65px;text-align:center">Unit</th><th style="width:105px;text-align:right">Unit Rate (${sym})</th><th style="width:115px;text-align:right">Amount (${sym})</th></tr></thead><tbody>${linesHTML}</tbody></table>
+    <div class="totals"><div class="totals-box"><div class="t-row"><span>Subtotal</span><span style="font-family:monospace">${sym} ${fmtN(sub)}</span></div>${sf(discount)>0?`<div class="t-row"><span>Discount (${sf(discount).toFixed(1)}%)</span><span style="font-family:monospace;color:#e05a5a">- ${sym} ${fmtN(discAmt)}</span></div>`:""}${vatAmt>0?`<div class="t-row"><span>VAT/Tax (${sf(vatP).toFixed(1)}%)</span><span style="font-family:monospace">${sym} ${fmtN(vatAmt)}</span></div>`:""}<div class="t-total"><span>TOTAL</span><span style="font-family:monospace">${sym} ${fmtN(total)}</span></div></div></div>
+    ${notes?`<div class="notes-box"><div class="notes-lbl">Notes & Terms</div>${notes}</div>`:""}
+    <div class="footer">TuoBuilds Consult | Civil & Structural Engineering | ${today()}</div></body></html>`;
+  };
+
+  const TH={fontFamily:"Courier New,monospace",fontSize:10,letterSpacing:"0.18em",textTransform:"uppercase",color:GOLD_D,padding:"0 6px 8px",textAlign:"left",borderBottom:`1px solid ${BORDER}`};
+  const TD={padding:"5px 6px",verticalAlign:"middle"};
+
+  return(
+    <div>
+      <Sec title="Document Details">
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:12}}>
+          <Field label="Document Type"><select style={SEL} value={type} onChange={e=>setType(e.target.value)}>{["Quotation","Invoice","Proforma Invoice","Receipt"].map(t=><option key={t}>{t}</option>)}</select></Field>
+          <Field label="Reference No."><input style={INP} value={invNo} onChange={e=>setInvNo(e.target.value)}/></Field>
+          <Field label="Issue Date"><input style={INP} type="date" value={issueDate} onChange={e=>setIssueDate(e.target.value)}/></Field>
+          <Field label="Due / Valid Until"><input style={INP} type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)}/></Field>
+        </div>
+      </Sec>
+      <Sec title="Bill To">
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <Field label="Client Name"><input style={INP} value={toName} placeholder="Client / Company" onChange={e=>setToName(e.target.value)}/></Field>
+          <Field label="Address / Location"><input style={INP} value={toAddr} placeholder="Address" onChange={e=>setToAddr(e.target.value)}/></Field>
+          <Field label="Email"><input style={INP} value={toEmail} placeholder="email@example.com" onChange={e=>setToEmail(e.target.value)}/></Field>
+          <Field label="Phone"><input style={INP} value={toPhone} placeholder="+233 …" onChange={e=>setToPhone(e.target.value)}/></Field>
+        </div>
+      </Sec>
+      <Sec title="Line Items">
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",minWidth:480}}>
+            <thead><tr><th style={TH}>Description</th><th style={{...TH,width:60}}>Qty</th><th style={{...TH,width:85}}>Unit</th><th style={{...TH,width:100}}>Rate ({sym})</th><th style={{...TH,width:105,textAlign:"right"}}>Amount</th><th style={{...TH,width:30}}/></tr></thead>
+            <tbody>{lines.map(row=>{const t=sf(row.qty)*sf(row.rate);return(
+              <tr key={row.id} style={{borderBottom:`1px solid rgba(201,168,76,0.07)`}}>
+                <td style={TD}><input style={INP} value={row.desc} placeholder="Service / work item" onChange={e=>setLines(ls=>ls.map(l=>l.id===row.id?{...l,desc:e.target.value}:l))}/></td>
+                <td style={TD}><input style={INP} type="number" value={row.qty} min={0} onChange={e=>setLines(ls=>ls.map(l=>l.id===row.id?{...l,qty:e.target.value}:l))}/></td>
+                <td style={TD}><select style={{...SEL,fontSize:11}} value={row.unit} onChange={e=>setLines(ls=>ls.map(l=>l.id===row.id?{...l,unit:e.target.value}:l))}>{UNITS.map(u=><option key={u}>{u}</option>)}</select></td>
+                <td style={TD}><input style={INP} type="number" value={row.rate} min={0} onChange={e=>setLines(ls=>ls.map(l=>l.id===row.id?{...l,rate:e.target.value}:l))}/></td>
+                <td style={{...TD,fontFamily:"Courier New",fontSize:12,color:GOLD_L,textAlign:"right",whiteSpace:"nowrap"}}>{money(t,sym)}</td>
+                <td style={TD}><DelBtn onClick={()=>setLines(ls=>ls.filter(l=>l.id!==row.id))}/></td>
+              </tr>
+            );})}</tbody>
+          </table>
+        </div>
+        <button style={BTN_A} onClick={()=>setLines(ls=>[...ls,{id:uid(),desc:"",qty:1,unit:"lump sum",rate:0}])}>＋ Add Line</button>
+      </Sec>
+      <Sec title="Totals & Terms">
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:16}}>
+          <Field label="Discount (%)"><input style={INP} type="number" value={discount} min={0} max={100} onChange={e=>setDiscount(e.target.value)}/></Field>
+          <Field label="VAT / Tax (%)"><input style={INP} type="number" value={vatP} min={0} onChange={e=>setVatP(e.target.value)}/></Field>
+        </div>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:16}}>
+          <SumBox label="Subtotal" val={money(sub,sym)}/>{sf(discount)>0&&<SumBox label={`Discount (${sf(discount).toFixed(1)}%)`} val={`- ${money(discAmt,sym)}`} color={DANGER}/>}{vatAmt>0&&<SumBox label={`VAT (${sf(vatP).toFixed(1)}%)`} val={money(vatAmt,sym)}/>}<SumBox label="Total" val={money(total,sym)} accent/>
+        </div>
+        <Field label="Notes / Payment Terms"><textarea style={{...INP,resize:"vertical",height:70,lineHeight:1.6}} value={notes} onChange={e=>setNotes(e.target.value)}/></Field>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:14}}>
+          <button style={BTN_P} onClick={()=>printHTML(buildHTML())}>🖨 Print / PDF {type}</button>
+        </div>
+      </Sec>
+    </div>
+  );
+}
+
+/* ── PROGRESS TRACKER ── */
+function ProgressTracker({projName,onSave,savedData}){
+  const [tasks,setTasks]=useState([]);
+  const [saveMsg,setSaveMsg]=useState("");
+  const STATUS_OPTS=["Not Started","In Progress","Done","On Hold","Blocked"];
+  const STATUS_COLORS={"Not Started":MUTED,"In Progress":BLUE,"Done":OK,"On Hold":ORANGE,"Blocked":DANGER};
+
+  useEffect(()=>{
+    if(savedData&&savedData.tasks){setTasks(savedData.tasks);return;}
+    setTasks([
+      {id:uid(),stage:"Site Preparation",task:"Clear & level site",status:"Done",pct:100,start:"",end:"",notes:""},
+      {id:uid(),stage:"Foundation",task:"Set out & excavation",status:"Done",pct:100,start:"",end:"",notes:""},
+      {id:uid(),stage:"Foundation",task:"Concrete footings",status:"In Progress",pct:60,start:"",end:"",notes:""},
+      {id:uid(),stage:"Superstructure",task:"Block laying to DPC",status:"Not Started",pct:0,start:"",end:"",notes:""},
+      {id:uid(),stage:"Superstructure",task:"Columns & beams",status:"Not Started",pct:0,start:"",end:"",notes:""},
+      {id:uid(),stage:"Roofing",task:"Roof truss installation",status:"Not Started",pct:0,start:"",end:"",notes:""},
+      {id:uid(),stage:"Finishes",task:"Plastering & screeding",status:"Not Started",pct:0,start:"",end:"",notes:""},
+      {id:uid(),stage:"Finishes",task:"Tiling & painting",status:"Not Started",pct:0,start:"",end:"",notes:""},
+    ]);
+  },[]);
+
+  const overallPct=tasks.length?Math.round(tasks.reduce((s,t)=>s+sf(t.pct),0)/tasks.length):0;
+  const stages=[...new Set(tasks.map(t=>t.stage))];
+  const handleSave=()=>{onSave({tasks});setSaveMsg("✓ Saved!");setTimeout(()=>setSaveMsg(""),2000);};
+
+  const buildPrintHTML=()=>{
+    const stageHTML=stages.map((st,si)=>{
+      const color=STAGE_COLORS[si%STAGE_COLORS.length];
+      const stageTasks=tasks.filter(t=>t.stage===st);
+      const stagePct=Math.round(stageTasks.reduce((s,t)=>s+sf(t.pct),0)/stageTasks.length);
+      return `<div style="margin-bottom:20px"><div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#f3f4f6;border-left:4px solid ${color};margin-bottom:8px"><strong style="font-size:13px">${st}</strong><span style="font-size:12px;color:#555">${stagePct}% complete</span></div><table style="width:100%;border-collapse:collapse"><thead><tr style="background:#f9fafb"><th style="padding:7px 10px;font-size:11px;text-align:left;border-bottom:1px solid #e5e7eb">Task</th><th style="padding:7px 10px;font-size:11px;text-align:left;border-bottom:1px solid #e5e7eb;width:90px">Status</th><th style="padding:7px 10px;font-size:11px;text-align:center;border-bottom:1px solid #e5e7eb;width:50px">%</th><th style="padding:7px 10px;font-size:11px;text-align:left;border-bottom:1px solid #e5e7eb;width:80px">Start</th><th style="padding:7px 10px;font-size:11px;text-align:left;border-bottom:1px solid #e5e7eb;width:80px">End</th><th style="padding:7px 10px;font-size:11px;text-align:left;border-bottom:1px solid #e5e7eb">Notes</th></tr></thead><tbody>${stageTasks.map(t=>`<tr><td style="padding:8px 10px;font-size:12px;border-bottom:1px solid #f0f0f0">${t.task||"—"}</td><td style="padding:8px 10px;font-size:12px;border-bottom:1px solid #f0f0f0"><span style="background:${STATUS_COLORS[t.status]||MUTED};color:#fff;padding:2px 8px;border-radius:10px;font-size:10px">${t.status}</span></td><td style="padding:8px 10px;text-align:center;font-size:12px;border-bottom:1px solid #f0f0f0">${t.pct}%</td><td style="padding:8px 10px;font-size:12px;border-bottom:1px solid #f0f0f0">${t.start||"—"}</td><td style="padding:8px 10px;font-size:12px;border-bottom:1px solid #f0f0f0">${t.end||"—"}</td><td style="padding:8px 10px;font-size:11px;color:#6b7280;border-bottom:1px solid #f0f0f0">${t.notes||""}</td></tr>`).join("")}</tbody></table></div>`;
+    }).join("");
+    return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Progress Report — ${projName||"Project"}</title><style>body{font-family:Arial,sans-serif;padding:32px;color:#111;margin:0}.hdr{border-bottom:3px solid #c9a84c;padding-bottom:16px;margin-bottom:24px}.co{font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:#c9a84c;font-weight:700}h1{font-size:22px;color:#0a1628;margin:6px 0}.meta{font-size:12px;color:#6b7280;margin-top:6px}.progress-bar{height:16px;background:#e5e7eb;border-radius:8px;overflow:hidden;margin:12px 0}.progress-fill{height:100%;background:linear-gradient(90deg,#4c7fc9,#4caf82);border-radius:8px}.footer{margin-top:30px;font-size:11px;color:#9ca3af;text-align:center;border-top:1px solid #e5e7eb;padding-top:14px}@media print{body{padding:15px}}</style></head><body><div class="hdr"><div class="co">TuoBuilds Consult</div><h1>Project Progress Report</h1><div class="meta"><strong>${projName||"Unnamed Project"}</strong> · ${today()}</div></div><div style="margin-bottom:24px"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><strong>Overall Progress</strong><strong>${overallPct}%</strong></div><div class="progress-bar"><div class="progress-fill" style="width:${overallPct}%"></div></div></div>${stageHTML}<div class="footer">TuoBuilds Consult | Civil & Structural Engineering | ${today()}</div></body></html>`;
+  };
+
+  const TH={fontFamily:"Courier New,monospace",fontSize:10,letterSpacing:"0.18em",textTransform:"uppercase",color:GOLD_D,padding:"0 6px 8px",textAlign:"left",borderBottom:`1px solid ${BORDER}`};
+  const TD={padding:"5px 6px",verticalAlign:"middle"};
+
+  return(
+    <div>
+      <Sec title="Overall Progress">
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+          <span style={{fontFamily:"Courier New",fontSize:12,color:MUTED}}>Project Completion</span>
+          <span style={{fontFamily:"Courier New",fontSize:14,color:GOLD_L,fontWeight:700}}>{overallPct}%</span>
+        </div>
+        <div style={{height:16,background:NAVY,borderRadius:8,overflow:"hidden",marginBottom:14}}>
+          <div style={{height:"100%",width:`${overallPct}%`,background:`linear-gradient(90deg,${BLUE},${OK})`,borderRadius:8,transition:"width 0.5s ease"}}/>
+        </div>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+          {STATUS_OPTS.map(s=>{const cnt=tasks.filter(t=>t.status===s).length;if(!cnt)return null;return(<div key={s} style={{display:"flex",alignItems:"center",gap:6,fontFamily:"Courier New",fontSize:11,color:MUTED}}><div style={{width:10,height:10,background:STATUS_COLORS[s],borderRadius:2}}/> {s} ({cnt})</div>);})}
+        </div>
+      </Sec>
+
+      {stages.map((stage,si)=>{
+        const color=STAGE_COLORS[si%STAGE_COLORS.length];
+        const stageTasks=tasks.filter(t=>t.stage===stage);
+        const stagePct=Math.round(stageTasks.reduce((s,t)=>s+sf(t.pct),0)/stageTasks.length);
+        return(
+          <Sec key={stage} title={`${stage} — ${stagePct}%`}>
+            <div style={{height:6,background:NAVY,borderRadius:3,overflow:"hidden",marginBottom:14}}><div style={{height:"100%",width:`${stagePct}%`,background:color,borderRadius:3,transition:"width 0.4s"}}/></div>
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",minWidth:520}}>
+                <thead><tr><th style={TH}>Task</th><th style={{...TH,width:110}}>Status</th><th style={{...TH,width:70}}>% Done</th><th style={{...TH,width:100}}>Start</th><th style={{...TH,width:100}}>End</th><th style={TH}>Notes</th><th style={{...TH,width:30}}/></tr></thead>
+                <tbody>{stageTasks.map(row=>(
+                  <tr key={row.id} style={{borderBottom:`1px solid rgba(201,168,76,0.07)`}}>
+                    <td style={TD}><input style={INP} value={row.task} placeholder="Task description" onChange={e=>setTasks(ts=>ts.map(t=>t.id===row.id?{...t,task:e.target.value}:t))}/></td>
+                    <td style={TD}><select style={{...SEL,fontSize:11,borderColor:STATUS_COLORS[row.status]||BORDER,color:STATUS_COLORS[row.status]||WHITE}} value={row.status} onChange={e=>setTasks(ts=>ts.map(t=>t.id===row.id?{...t,status:e.target.value,pct:e.target.value==="Done"?100:t.pct}:t))}>{STATUS_OPTS.map(s=><option key={s}>{s}</option>)}</select></td>
+                    <td style={TD}><input style={INP} type="number" value={row.pct} min={0} max={100} onChange={e=>setTasks(ts=>ts.map(t=>t.id===row.id?{...t,pct:Math.min(100,sf(e.target.value))}:t))}/></td>
+                    <td style={TD}><input style={{...INP,fontSize:11}} type="date" value={row.start} onChange={e=>setTasks(ts=>ts.map(t=>t.id===row.id?{...t,start:e.target.value}:t))}/></td>
+                    <td style={TD}><input style={{...INP,fontSize:11}} type="date" value={row.end} onChange={e=>setTasks(ts=>ts.map(t=>t.id===row.id?{...t,end:e.target.value}:t))}/></td>
+                    <td style={TD}><input style={{...INP,fontSize:11}} value={row.notes} placeholder="Notes" onChange={e=>setTasks(ts=>ts.map(t=>t.id===row.id?{...t,notes:e.target.value}:t))}/></td>
+                    <td style={TD}><DelBtn onClick={()=>setTasks(ts=>ts.filter(t=>t.id!==row.id))}/></td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          </Sec>
+        );
+      })}
+
+      <Sec title="Add Tasks">
+        <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+          {["Site Preparation","Foundation","Superstructure","Roofing","Plumbing","Electrical","Finishes","External Works"].map(stage=>(
+            <button key={stage} style={{...BTN_A,marginTop:0}} onClick={()=>setTasks(ts=>[...ts,{id:uid(),stage,task:"",status:"Not Started",pct:0,start:"",end:"",notes:""}])}>＋ {stage}</button>
+          ))}
+        </div>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:14}}>
+          <button style={BTN_P} onClick={()=>printHTML(buildPrintHTML())}>🖨 Print Progress Report</button>
+          <button style={BTN_S} onClick={handleSave}>💾 Save</button>
+          {saveMsg&&<span style={{fontFamily:"Courier New",fontSize:11,color:OK,alignSelf:"center"}}>{saveMsg}</span>}
+        </div>
+      </Sec>
+    </div>
+  );
+}
+
+/* ── ROOT APP ── */
+const TABS=["Cost Estimator","BOQ Generator","Invoice/Quotation","Progress Tracker"];
+const STORAGE_KEY="tuobuilds_v2_projects";
+
+function App(){
+  const [tab,setTab]=useState(0);
+  const [projName,setProjName]=useState("");
+  const [client,setClient]=useState("");
+  const [loc,setLoc]=useState("");
+  const [ptype,setPtype]=useState("Residential");
+  const [curr,setCurr]=useState("GHS");
+  const [savedData,setSavedData]=useState({est:{},boq:{},tracker:{}});
+  const [saveStatus,setSaveStatus]=useState("");
+
+  useEffect(()=>{
+    try{
+      const raw=localStorage.getItem(STORAGE_KEY);
+      if(raw){const d=JSON.parse(raw);if(d.meta){setProjName(d.meta.projName||"");setClient(d.meta.client||"");setLoc(d.meta.loc||"");setPtype(d.meta.ptype||"Residential");setCurr(d.meta.curr||"GHS");}setSavedData({est:d.est||{},boq:d.boq||{},tracker:d.tracker||{}});}
+    }catch(e){}
+  },[]);
+
+  const saveSection=(key,data)=>{
+    try{const prev=JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}");const updated={...prev,meta:{projName,client,loc,ptype,curr},[key]:data};localStorage.setItem(STORAGE_KEY,JSON.stringify(updated));setSavedData(s=>({...s,[key]:data}));}
+    catch(e){setSaveStatus("⚠ Storage unavailable");}
+  };
+
+  const clearAll=()=>{if(!window.confirm("Clear ALL saved project data?"))return;try{localStorage.removeItem(STORAGE_KEY);}catch(e){}setSavedData({est:{},boq:{},tracker:{}});setSaveStatus("Cleared");setTimeout(()=>setSaveStatus(""),2000);};
+
+  return(
+    <div style={{background:NAVY,minHeight:"100vh",color:WHITE,fontFamily:"sans-serif"}}>
+      <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0,backgroundImage:`linear-gradient(rgba(201,168,76,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(201,168,76,0.025) 1px,transparent 1px)`,backgroundSize:"48px 48px"}}/>
+      <div style={{position:"relative",zIndex:1,maxWidth:940,margin:"0 auto",padding:"36px 18px 80px"}}>
+
+        <div style={{textAlign:"center",marginBottom:30,animation:"fadeUp 0.5s ease both"}}>
+          <div style={{display:"inline-flex",alignItems:"center",gap:12,marginBottom:10}}>
+            <div style={{width:32,height:32,border:`2px solid ${GOLD}`,transform:"rotate(45deg)",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{width:12,height:12,background:GOLD}}/></div>
+            <span style={{fontFamily:"Georgia,serif",fontSize:13,fontWeight:700,letterSpacing:"0.15em",textTransform:"uppercase",color:GOLD}}>TuoBuilds Consult</span>
+          </div>
+          <h1 style={{fontFamily:"Georgia,serif",fontSize:"clamp(1.6rem,4vw,2.6rem)",fontWeight:900,lineHeight:1.1,color:WHITE,margin:"0 0 8px"}}>Project <span style={{color:GOLD}}>Tools</span></h1>
+          <p style={{fontFamily:"Courier New,monospace",fontSize:10,letterSpacing:"0.22em",textTransform:"uppercase",color:MUTED,marginTop:6}}>Cost · BOQ · Invoice · Progress</p>
+          <div style={{width:50,height:2,background:`linear-gradient(90deg,${GOLD},transparent)`,margin:"12px auto 0"}}/>
+        </div>
+
+        <Sec title="Project Details">
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div style={{gridColumn:"1/-1"}}><Field label="Project Name"><input style={INP} value={projName} placeholder="e.g. 3-Bedroom Residential Build — Kumasi" onChange={e=>setProjName(e.target.value)}/></Field></div>
+            <Field label="Client"><input style={INP} value={client} placeholder="Client / Ref" onChange={e=>setClient(e.target.value)}/></Field>
+            <Field label="Location"><input style={INP} value={loc} placeholder="e.g. Adum, Kumasi" onChange={e=>setLoc(e.target.value)}/></Field>
+            <Field label="Project Type"><select style={SEL} value={ptype} onChange={e=>setPtype(e.target.value)}>{TYPES.map(t=><option key={t}>{t}</option>)}</select></Field>
+            <Field label="Currency"><select style={SEL} value={curr} onChange={e=>setCurr(e.target.value)}>{CURRS.map(c=><option key={c}>{c}</option>)}</select></Field>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginTop:12,flexWrap:"wrap"}}>
+            <div style={{fontFamily:"Courier New",fontSize:10,color:MUTED,letterSpacing:"0.1em"}}>💾 Project data saves per section — persists across sessions</div>
+            <button onClick={clearAll} style={{...BTN_S,padding:"7px 14px",fontSize:10,marginLeft:"auto"}}>✕ Clear All Saved Data</button>
+            {saveStatus&&<span style={{fontFamily:"Courier New",fontSize:10,color:DANGER}}>{saveStatus}</span>}
+          </div>
+        </Sec>
+
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:2,marginBottom:16,background:NAVY_M,borderRadius:4,padding:4,border:`1px solid ${BORDER}`}}>
+          {TABS.map((t,i)=>(
+            <button key={t} onClick={()=>setTab(i)} style={{padding:"10px 6px",border:"none",borderRadius:3,cursor:"pointer",fontFamily:"Courier New,monospace",fontSize:"clamp(9px,1.5vw,11px)",letterSpacing:"0.1em",textTransform:"uppercase",transition:"all 0.2s",background:tab===i?NAVY_L:"none",color:tab===i?GOLD:MUTED,fontWeight:tab===i?700:"normal"}}>{t}</button>
+          ))}
+        </div>
+
+        {tab===0&&<CostEstimator sym={curr} projName={projName} client={client} loc={loc} ptype={ptype} onSave={d=>saveSection("est",d)} savedData={savedData.est}/>}
+        {tab===1&&<BOQGenerator sym={curr} projName={projName} client={client} loc={loc} ptype={ptype} onSave={d=>saveSection("boq",d)} savedData={savedData.boq}/>}
+        {tab===2&&<InvoiceGen sym={curr} projName={projName} client={client} loc={loc} ptype={ptype}/>}
+        {tab===3&&<ProgressTracker projName={projName} onSave={d=>saveSection("tracker",d)} savedData={savedData.tracker}/>}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
