@@ -1,0 +1,1301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>TuoBuilds Consult — Project Tools v4</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0a1628;color:#f4f1ea;font-family:sans-serif;min-height:100vh}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:#0a1628}
+::-webkit-scrollbar-thumb{background:#8a6f30;border-radius:3px}
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+input:focus,select:focus,textarea:focus{border-color:#c9a84c!important;box-shadow:0 0 0 2px rgba(201,168,76,0.12)!important;outline:none}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useCallback,useRef}=React;
+
+/* ─── Theme ─────────────────────────────────────────── */
+const NAVY="#0a1628",NAVY_M="#112240",NAVY_L="#1a3558",GOLD="#c9a84c",GOLD_L="#e8c97a",
+      GOLD_D="#8a6f30",WHITE="#f4f1ea",MUTED="#8a9bb5",BORDER="rgba(201,168,76,0.2)",
+      DANGER="#e05a5a",OK="#4caf82",BLUE="#4c7fc9",PURPLE="#9b4cc9",ORANGE="#c9844c";
+
+/* ─── Fallback FX rates (GHS base, May 2026 Stanbic mid) ─── */
+const FALLBACK_RATES={GHS:1,USD:0.0645,GBP:0.0508,EUR:0.059};
+const CURRS=["GHS","USD","GBP","EUR"];
+const CURR_FLAGS={GHS:"🇬🇭",USD:"🇺🇸",GBP:"🇬🇧",EUR:"🇪🇺"};
+
+const UNITS=["bags","m³","m²","m","kg","tons","rolls","pcs","litres","sets","lump sum","hr","day","m.run","sheets","packs"];
+const TYPES=["Residential","Commercial","Industrial","Infrastructure","Renovation","Mixed-Use","Institutional"];
+const BOQ_SECTIONS=["Preliminaries","Substructure / Foundation","Superstructure / Frame","Roofing","External Walls","Internal Walls & Partitions","Floors","Ceilings","Windows & Doors","Finishes","Plumbing & Drainage","Electrical Works","Mechanical / HVAC","External Works","Landscaping","Provisional Sums"];
+const STAGE_COLORS=["#4c7fc9","#4caf82","#c9a84c","#c9844c","#9b4cc9","#e05a5a","#4cc9c4","#c94c9b","#82c94c","#c9c24c"];
+const STATUS_OPTS=["Not Started","In Progress","Done","On Hold","Blocked"];
+const STATUS_COLORS={"Not Started":MUTED,"In Progress":BLUE,"Done":OK,"On Hold":ORANGE,"Blocked":DANGER};
+
+/* ══════════════════════════════════════════════════════
+   GHANA MATERIAL PRICE DATABASE — Updated May 2026
+   Sources: BusyList, NewsGhana, Troysteel, Busylist, 
+            Jiji.com.gh, Added Supplies, Prime Building 
+            Cost Index (GSS Jan 2026), Kumasi open market
+══════════════════════════════════════════════════════ */
+const GH_PRICES=[
+  /* ── CEMENT & BINDERS ── */
+  {cat:"Cement & Binders",item:"GHACEM Cement 42.5R (50kg bag)",unit:"bags",rate:88,note:"Ex-Kumasi depot, May 2026"},
+  {cat:"Cement & Binders",item:"Dangote Cement 42.5R (50kg bag)",unit:"bags",rate:80,note:"Competitive grade"},
+  {cat:"Cement & Binders",item:"CIMAF Cement 32.5 (50kg bag)",unit:"bags",rate:72,note:"Economy grade"},
+  {cat:"Cement & Binders",item:"Diamond Cement (50kg bag)",unit:"bags",rate:85,note:""},
+  {cat:"Cement & Binders",item:"White cement (25kg bag)",unit:"bags",rate:120,note:"Decorative use"},
+  {cat:"Cement & Binders",item:"Waterproof cement additive (1L)",unit:"pcs",rate:45,note:"Sika or equiv."},
+  {cat:"Cement & Binders",item:"Ready-mix concrete (C20, m³ delivered)",unit:"m³",rate:2200,note:"Incl. delivery Kumasi"},
+  {cat:"Cement & Binders",item:"Ready-mix concrete (C25, m³ delivered)",unit:"m³",rate:2500,note:""},
+  {cat:"Cement & Binders",item:"Lime / Hydrated lime (25kg bag)",unit:"bags",rate:65,note:""},
+  {cat:"Cement & Binders",item:"Tile adhesive / Kerabond (25kg bag)",unit:"bags",rate:120,note:""},
+  {cat:"Cement & Binders",item:"Epoxy grout (5kg set)",unit:"sets",rate:180,note:""},
+  {cat:"Cement & Binders",item:"Tile grout (5kg bag)",unit:"bags",rate:55,note:""},
+  {cat:"Cement & Binders",item:"Self-levelling compound (25kg)",unit:"bags",rate:250,note:"Floor preparation"},
+
+  /* ── AGGREGATES & FILL ── */
+  {cat:"Aggregates & Fill",item:"Sharp sand (filling grade, ton)",unit:"tons",rate:300,note:"Quarry, Kumasi"},
+  {cat:"Aggregates & Fill",item:"Plastering sand (fine, ton)",unit:"tons",rate:350,note:"Finer screened"},
+  {cat:"Aggregates & Fill",item:"River sand / washing sand (ton)",unit:"tons",rate:320,note:""},
+  {cat:"Aggregates & Fill",item:"Granite chippings 3/4\" (ton)",unit:"tons",rate:380,note:"Crushed granite"},
+  {cat:"Aggregates & Fill",item:"Granite chippings 1/2\" (ton)",unit:"tons",rate:400,note:""},
+  {cat:"Aggregates & Fill",item:"Quarry dust / crusher run (ton)",unit:"tons",rate:280,note:"Sub-base material"},
+  {cat:"Aggregates & Fill",item:"Laterite / red earth (ton)",unit:"tons",rate:200,note:"Fill, road base"},
+  {cat:"Aggregates & Fill",item:"Hardcore (rock/stone fill, ton)",unit:"tons",rate:260,note:""},
+  {cat:"Aggregates & Fill",item:"Premix base course (ton)",unit:"tons",rate:650,note:"Road construction"},
+  {cat:"Aggregates & Fill",item:"Anti-termite chemical treatment (m²)",unit:"m²",rate:30,note:"Pre-slab treatment"},
+
+  /* ── SANDCRETE BLOCKS ── */
+  {cat:"Sandcrete Blocks",item:"Sandcrete block 5\" solid",unit:"pcs",rate:10,note:"Local Kumasi factory"},
+  {cat:"Sandcrete Blocks",item:"Sandcrete block 6\" solid",unit:"pcs",rate:14,note:"Standard walling"},
+  {cat:"Sandcrete Blocks",item:"Sandcrete block 6\" hollow",unit:"pcs",rate:12,note:""},
+  {cat:"Sandcrete Blocks",item:"Sandcrete block 9\" solid",unit:"pcs",rate:18,note:"External walls"},
+  {cat:"Sandcrete Blocks",item:"Sandcrete block 9\" hollow",unit:"pcs",rate:16,note:""},
+  {cat:"Sandcrete Blocks",item:"Interlocking concrete block (m²)",unit:"m²",rate:220,note:"Paving, driveways"},
+  {cat:"Sandcrete Blocks",item:"Kerb stone precast (each)",unit:"pcs",rate:55,note:""},
+  {cat:"Sandcrete Blocks",item:"Manhole cover precast (450mm)",unit:"pcs",rate:850,note:""},
+  {cat:"Sandcrete Blocks",item:"Lintel precast (1.2m)",unit:"pcs",rate:120,note:"Door/window head"},
+  {cat:"Sandcrete Blocks",item:"Lintel precast (1.8m)",unit:"pcs",rate:180,note:""},
+  {cat:"Sandcrete Blocks",item:"Precast concrete slab panel (1.2×0.6m)",unit:"pcs",rate:350,note:""},
+
+  /* ── STEEL & REINFORCEMENT ── */
+  {cat:"Steel & Reinforcement",item:"Y6 rebar mild steel (12m)",unit:"pcs",rate:28,note:"~5700 GHS/ton"},
+  {cat:"Steel & Reinforcement",item:"Y8 rebar mild steel (12m)",unit:"pcs",rate:40,note:"~5700 GHS/ton, 142pcs"},
+  {cat:"Steel & Reinforcement",item:"Y10 high tensile (12m)",unit:"pcs",rate:58,note:"~6600 GHS/ton, 114pcs"},
+  {cat:"Steel & Reinforcement",item:"Y12 high tensile (12m)",unit:"pcs",rate:85,note:"~7600 GHS/ton, 89pcs"},
+  {cat:"Steel & Reinforcement",item:"Y14 high tensile (12m)",unit:"pcs",rate:115,note:"~7600 GHS/ton"},
+  {cat:"Steel & Reinforcement",item:"Y16 high tensile (12m)",unit:"pcs",rate:145,note:"~7600 GHS/ton, 52pcs"},
+  {cat:"Steel & Reinforcement",item:"Y20 high tensile (12m)",unit:"pcs",rate:230,note:"~7800 GHS/ton, 34pcs"},
+  {cat:"Steel & Reinforcement",item:"Y25 high tensile (12m)",unit:"pcs",rate:360,note:"~8000 GHS/ton"},
+  {cat:"Steel & Reinforcement",item:"Y32 high tensile (12m)",unit:"pcs",rate:580,note:"Heavy structural"},
+  {cat:"Steel & Reinforcement",item:"Binding wire (kg)",unit:"kg",rate:65,note:"GHS 65/unit per NewsGhana 2025"},
+  {cat:"Steel & Reinforcement",item:"BRC mesh A142 (2.4×4.8m sheet)",unit:"pcs",rate:680,note:""},
+  {cat:"Steel & Reinforcement",item:"BRC mesh A193 (2.4×4.8m sheet)",unit:"pcs",rate:820,note:""},
+  {cat:"Steel & Reinforcement",item:"BRC mesh A252 (2.4×4.8m sheet)",unit:"pcs",rate:1050,note:""},
+  {cat:"Steel & Reinforcement",item:"Angle iron 25×25×3mm (6m)",unit:"pcs",rate:85,note:""},
+  {cat:"Steel & Reinforcement",item:"Angle iron 50×50×5mm (6m)",unit:"pcs",rate:250,note:""},
+  {cat:"Steel & Reinforcement",item:"Angle iron 75×75×6mm (6m)",unit:"pcs",rate:450,note:""},
+  {cat:"Steel & Reinforcement",item:"Hollow section 50×50×2mm (6m)",unit:"pcs",rate:320,note:"Mild steel"},
+  {cat:"Steel & Reinforcement",item:"Hollow section 100×100×3mm (6m)",unit:"pcs",rate:680,note:""},
+  {cat:"Steel & Reinforcement",item:"Flat bar 50×6mm (6m)",unit:"pcs",rate:180,note:""},
+  {cat:"Steel & Reinforcement",item:"Universal column 152×152×23 kg/m",unit:"m",rate:850,note:"Structural steel"},
+  {cat:"Steel & Reinforcement",item:"Universal beam 203×133×25 kg/m",unit:"m",rate:980,note:""},
+  {cat:"Steel & Reinforcement",item:"GI pipe 1\" (6m)",unit:"pcs",rate:220,note:""},
+  {cat:"Steel & Reinforcement",item:"GI pipe 1.5\" (6m)",unit:"pcs",rate:340,note:""},
+  {cat:"Steel & Reinforcement",item:"GI pipe 2\" (6m)",unit:"pcs",rate:520,note:""},
+  {cat:"Steel & Reinforcement",item:"Stainless steel rod 10mm (3m)",unit:"pcs",rate:380,note:"Balustrade/handrail"},
+  {cat:"Steel & Reinforcement",item:"Chainlink fence (2m high, per m)",unit:"m",rate:180,note:"Incl. posts"},
+
+  /* ── ROOFING ── */
+  {cat:"Roofing",item:"Aluminium IBR sheet 0.45mm (pack/20)",unit:"packs",rate:800,note:"Troysteel/market avg 2025"},
+  {cat:"Roofing",item:"Aluminium IBR sheet 0.55mm (pack/20)",unit:"packs",rate:950,note:"Premium thickness"},
+  {cat:"Roofing",item:"Aluzinc IBR sheet plain 0.35mm (pack/20)",unit:"packs",rate:1050,note:"Galvalume quality"},
+  {cat:"Roofing",item:"Aluzinc IBR sheet 0.47mm (pack/20)",unit:"packs",rate:1300,note:""},
+  {cat:"Roofing",item:"Aluzinc coloured sheet 0.55mm (pack/20)",unit:"packs",rate:1700,note:"COLORBOND equiv."},
+  {cat:"Roofing",item:"Stone-coated steel tile (pack/20 pcs)",unit:"packs",rate:180,note:"NZ import, 50yr warranty"},
+  {cat:"Roofing",item:"Aluminium roofing per m² supply only",unit:"m²",rate:50,note:"Approx installed cost"},
+  {cat:"Roofing",item:"Aluzinc per m² supply only",unit:"m²",rate:75,note:""},
+  {cat:"Roofing",item:"Stone-coated tile per m² supply only",unit:"m²",rate:120,note:""},
+  {cat:"Roofing",item:"Bitumen felt underlay (m²)",unit:"m²",rate:22,note:""},
+  {cat:"Roofing",item:"Roof truss softwood 3m span (set)",unit:"sets",rate:1200,note:"Timber, incl. delivery"},
+  {cat:"Roofing",item:"Roof truss softwood 4m span (set)",unit:"sets",rate:1600,note:""},
+  {cat:"Roofing",item:"Roof truss softwood 5m span (set)",unit:"sets",rate:2100,note:""},
+  {cat:"Roofing",item:"Steel roof truss 5m span (set)",unit:"sets",rate:4500,note:"Troysteel precision"},
+  {cat:"Roofing",item:"Purlin timber 2\"×2\" (3m)",unit:"pcs",rate:55,note:""},
+  {cat:"Roofing",item:"Ridgecap aluminium (m)",unit:"m",rate:65,note:""},
+  {cat:"Roofing",item:"Guttering PVC 4\" (3m length)",unit:"pcs",rate:85,note:""},
+  {cat:"Roofing",item:"Downpipe PVC 3\" (3m length)",unit:"pcs",rate:65,note:""},
+  {cat:"Roofing",item:"Roofing screws (box of 200)",unit:"pcs",rate:65,note:"Self-drilling"},
+  {cat:"Roofing",item:"Fascia board hardwood (3m)",unit:"pcs",rate:120,note:""},
+  {cat:"Roofing",item:"Soffit board fibre cement (m²)",unit:"m²",rate:95,note:""},
+  {cat:"Roofing",item:"Flat roof waterproofing membrane (m²)",unit:"m²",rate:130,note:"Torch-on bitumen 3mm"},
+
+  /* ── TIMBER & FORMWORK ── */
+  {cat:"Timber & Formwork",item:"Plywood 3mm (1.2×2.4m sheet)",unit:"pcs",rate:180,note:""},
+  {cat:"Timber & Formwork",item:"Plywood 6mm (1.2×2.4m sheet)",unit:"pcs",rate:220,note:""},
+  {cat:"Timber & Formwork",item:"Plywood 12mm (1.2×2.4m sheet)",unit:"pcs",rate:310,note:"Formwork"},
+  {cat:"Timber & Formwork",item:"Plywood 18mm marine (1.2×2.4m)",unit:"pcs",rate:420,note:"Structural formwork"},
+  {cat:"Timber & Formwork",item:"Hardwood (wawa) 2\"×4\"×16ft",unit:"pcs",rate:120,note:"Market avg 2025"},
+  {cat:"Timber & Formwork",item:"Hardwood (wawa) 2\"×6\"×16ft",unit:"pcs",rate:175,note:""},
+  {cat:"Timber & Formwork",item:"Hardwood (wawa) 2\"×8\"×16ft",unit:"pcs",rate:235,note:""},
+  {cat:"Timber & Formwork",item:"Hardwood (wawa) 2\"×12\"×16ft",unit:"pcs",rate:350,note:""},
+  {cat:"Timber & Formwork",item:"Wawa board 25×300×4.2m",unit:"pcs",rate:280,note:"Ceiling/cladding"},
+  {cat:"Timber & Formwork",item:"Hardwood per m³ (wawa)",unit:"m³",rate:4500,note:""},
+  {cat:"Timber & Formwork",item:"Shuttering board 1\"×6\"×16ft",unit:"pcs",rate:90,note:""},
+  {cat:"Timber & Formwork",item:"Softwood 50×100×4.2m (2\"×4\")",unit:"pcs",rate:110,note:""},
+  {cat:"Timber & Formwork",item:"Battens 13×50×4.2m",unit:"pcs",rate:45,note:""},
+  {cat:"Timber & Formwork",item:"Particleboard 18mm (1.2×2.4m)",unit:"pcs",rate:280,note:"Furniture/joinery"},
+  {cat:"Timber & Formwork",item:"MDF board 18mm (1.2×2.4m)",unit:"pcs",rate:320,note:""},
+  {cat:"Timber & Formwork",item:"Acrow prop (hire per month)",unit:"pcs",rate:120,note:"Adjustable steel prop"},
+  {cat:"Timber & Formwork",item:"Formwork oil / release agent (20L)",unit:"pcs",rate:220,note:""},
+  {cat:"Timber & Formwork",item:"Cover blocks / spacers (bag 50)",unit:"bags",rate:45,note:"Concrete cover"},
+
+  /* ── PLUMBING & SANITARY ── */
+  {cat:"Plumbing & Sanitary",item:"uPVC pressure pipe 1/2\" (6m)",unit:"pcs",rate:48,note:"Water supply"},
+  {cat:"Plumbing & Sanitary",item:"uPVC pressure pipe 3/4\" (6m)",unit:"pcs",rate:62,note:""},
+  {cat:"Plumbing & Sanitary",item:"uPVC pressure pipe 1\" (6m)",unit:"pcs",rate:85,note:"Added Supplies 2026"},
+  {cat:"Plumbing & Sanitary",item:"uPVC pressure pipe 1.5\" (6m)",unit:"pcs",rate:130,note:""},
+  {cat:"Plumbing & Sanitary",item:"uPVC pressure pipe 2\" (6m)",unit:"pcs",rate:185,note:""},
+  {cat:"Plumbing & Sanitary",item:"PVC drainage pipe 2\" (6m)",unit:"pcs",rate:110,note:""},
+  {cat:"Plumbing & Sanitary",item:"PVC drainage pipe 3\" (6m)",unit:"pcs",rate:175,note:""},
+  {cat:"Plumbing & Sanitary",item:"PVC drainage pipe 4\" (6m)",unit:"pcs",rate:230,note:""},
+  {cat:"Plumbing & Sanitary",item:"PVC drainage pipe 6\" (6m)",unit:"pcs",rate:420,note:""},
+  {cat:"Plumbing & Sanitary",item:"PPR hot/cold pipe 20mm (4m)",unit:"pcs",rate:95,note:""},
+  {cat:"Plumbing & Sanitary",item:"PPR hot/cold pipe 25mm (4m)",unit:"pcs",rate:130,note:""},
+  {cat:"Plumbing & Sanitary",item:"HDPE pipe 50mm (6m)",unit:"pcs",rate:280,note:"Underground supply"},
+  {cat:"Plumbing & Sanitary",item:"HDPE pipe 110mm (6m)",unit:"pcs",rate:680,note:""},
+  {cat:"Plumbing & Sanitary",item:"Gate valve brass 1\"",unit:"pcs",rate:120,note:""},
+  {cat:"Plumbing & Sanitary",item:"Ball valve 1/2\"",unit:"pcs",rate:65,note:""},
+  {cat:"Plumbing & Sanitary",item:"Ball valve 1\"",unit:"pcs",rate:95,note:""},
+  {cat:"Plumbing & Sanitary",item:"Float valve 1/2\"",unit:"pcs",rate:85,note:""},
+  {cat:"Plumbing & Sanitary",item:"PVC elbow 4\" (each)",unit:"pcs",rate:22,note:""},
+  {cat:"Plumbing & Sanitary",item:"PVC P-trap 40mm",unit:"pcs",rate:45,note:""},
+  {cat:"Plumbing & Sanitary",item:"Flexible hose 600mm",unit:"pcs",rate:55,note:""},
+  {cat:"Plumbing & Sanitary",item:"Teflon tape (roll)",unit:"rolls",rate:8,note:""},
+  {cat:"Plumbing & Sanitary",item:"WC toilet (close-coupled standard)",unit:"pcs",rate:1200,note:"Local brand 2026"},
+  {cat:"Plumbing & Sanitary",item:"WC toilet (close-coupled mid-range)",unit:"pcs",rate:2500,note:"Ideal Standard/Roca"},
+  {cat:"Plumbing & Sanitary",item:"WC toilet (smart/premium)",unit:"pcs",rate:5500,note:""},
+  {cat:"Plumbing & Sanitary",item:"Wash hand basin (pedestal standard)",unit:"pcs",rate:850,note:""},
+  {cat:"Plumbing & Sanitary",item:"Wash hand basin (wall-hung)",unit:"pcs",rate:1400,note:""},
+  {cat:"Plumbing & Sanitary",item:"Shower tray 900×900mm",unit:"pcs",rate:1100,note:""},
+  {cat:"Plumbing & Sanitary",item:"Shower enclosure (900mm)",unit:"pcs",rate:3200,note:""},
+  {cat:"Plumbing & Sanitary",item:"Bath tub acrylic",unit:"pcs",rate:3500,note:""},
+  {cat:"Plumbing & Sanitary",item:"Kitchen sink stainless double bowl",unit:"pcs",rate:950,note:""},
+  {cat:"Plumbing & Sanitary",item:"Mixer tap (basin)",unit:"pcs",rate:350,note:"Chrome, mid-range"},
+  {cat:"Plumbing & Sanitary",item:"Mixer tap (bath/shower)",unit:"pcs",rate:550,note:""},
+  {cat:"Plumbing & Sanitary",item:"Kitchen mixer tap",unit:"pcs",rate:480,note:""},
+  {cat:"Plumbing & Sanitary",item:"Shower head (rain type)",unit:"pcs",rate:280,note:""},
+  {cat:"Plumbing & Sanitary",item:"Solar water heater (200L)",unit:"pcs",rate:8500,note:""},
+  {cat:"Plumbing & Sanitary",item:"Electric water heater 50L",unit:"pcs",rate:2200,note:""},
+  {cat:"Plumbing & Sanitary",item:"Polytank 500L",unit:"pcs",rate:800,note:""},
+  {cat:"Plumbing & Sanitary",item:"Polytank 1000L",unit:"pcs",rate:1500,note:""},
+  {cat:"Plumbing & Sanitary",item:"Polytank 2500L",unit:"pcs",rate:3200,note:""},
+  {cat:"Plumbing & Sanitary",item:"Polytank 5000L",unit:"pcs",rate:6500,note:""},
+  {cat:"Plumbing & Sanitary",item:"Submersible pump 0.5HP",unit:"pcs",rate:1800,note:""},
+  {cat:"Plumbing & Sanitary",item:"Submersible pump 1HP",unit:"pcs",rate:3000,note:""},
+  {cat:"Plumbing & Sanitary",item:"Pressure pump (surface mounted)",unit:"pcs",rate:2200,note:""},
+  {cat:"Plumbing & Sanitary",item:"Borehole casing uPVC 4\" (m)",unit:"m",rate:350,note:""},
+  {cat:"Plumbing & Sanitary",item:"Septic tank 3000L (concrete, installed)",unit:"pcs",rate:15000,note:""},
+  {cat:"Plumbing & Sanitary",item:"BioFil digester (complete system)",unit:"sets",rate:22000,note:""},
+  {cat:"Plumbing & Sanitary",item:"Soakaway pit (single)",unit:"pcs",rate:4500,note:""},
+
+  /* ── ELECTRICAL ── */
+  {cat:"Electrical",item:"Cable 1.5mm² twin/earth (50m roll)",unit:"rolls",rate:280,note:""},
+  {cat:"Electrical",item:"Cable 2.5mm² twin/earth (50m roll)",unit:"rolls",rate:420,note:""},
+  {cat:"Electrical",item:"Cable 2.5mm² (100m roll)",unit:"rolls",rate:780,note:"General circuits"},
+  {cat:"Electrical",item:"Cable 4mm² (100m roll)",unit:"rolls",rate:1350,note:""},
+  {cat:"Electrical",item:"Cable 6mm² (100m roll)",unit:"rolls",rate:2000,note:""},
+  {cat:"Electrical",item:"Cable 10mm² (100m roll)",unit:"rolls",rate:3200,note:""},
+  {cat:"Electrical",item:"Armoured cable 4×6mm² (m)",unit:"m",rate:110,note:"Underground/mains feeder"},
+  {cat:"Electrical",item:"Armoured cable 4×16mm² (m)",unit:"m",rate:280,note:""},
+  {cat:"Electrical",item:"Consumer unit 6-way (MCB)",unit:"pcs",rate:650,note:""},
+  {cat:"Electrical",item:"Consumer unit 10-way (MCB)",unit:"pcs",rate:950,note:""},
+  {cat:"Electrical",item:"Consumer unit 16-way (MCB)",unit:"pcs",rate:1400,note:""},
+  {cat:"Electrical",item:"MCB 6A single pole",unit:"pcs",rate:55,note:""},
+  {cat:"Electrical",item:"MCB 20A single pole",unit:"pcs",rate:65,note:""},
+  {cat:"Electrical",item:"MCB 32A single pole",unit:"pcs",rate:80,note:""},
+  {cat:"Electrical",item:"MCB 63A double pole",unit:"pcs",rate:250,note:""},
+  {cat:"Electrical",item:"RCCB 63A 30mA (4-pole)",unit:"pcs",rate:580,note:"RCD protection"},
+  {cat:"Electrical",item:"Socket outlet 13A single",unit:"pcs",rate:45,note:""},
+  {cat:"Electrical",item:"Socket outlet 13A twin switched",unit:"pcs",rate:65,note:""},
+  {cat:"Electrical",item:"Socket USB outlet twin",unit:"pcs",rate:180,note:""},
+  {cat:"Electrical",item:"1-gang light switch",unit:"pcs",rate:38,note:""},
+  {cat:"Electrical",item:"2-gang light switch",unit:"pcs",rate:55,note:""},
+  {cat:"Electrical",item:"Outdoor weatherproof socket",unit:"pcs",rate:95,note:""},
+  {cat:"Electrical",item:"PVC conduit 20mm (3m)",unit:"pcs",rate:22,note:""},
+  {cat:"Electrical",item:"PVC conduit 25mm (3m)",unit:"pcs",rate:30,note:""},
+  {cat:"Electrical",item:"Steel conduit 20mm (3m)",unit:"pcs",rate:65,note:""},
+  {cat:"Electrical",item:"Distribution board 3-phase 18-way",unit:"pcs",rate:5500,note:""},
+  {cat:"Electrical",item:"LED bulkhead light 18W (outdoor)",unit:"pcs",rate:220,note:""},
+  {cat:"Electrical",item:"LED ceiling panel 18W",unit:"pcs",rate:120,note:""},
+  {cat:"Electrical",item:"LED batten 36W (1.2m)",unit:"pcs",rate:180,note:""},
+  {cat:"Electrical",item:"LED downlight 10W (recessed)",unit:"pcs",rate:95,note:""},
+  {cat:"Electrical",item:"LED spotlight 7W (track)",unit:"pcs",rate:75,note:""},
+  {cat:"Electrical",item:"Floodlight 100W LED (outdoor)",unit:"pcs",rate:380,note:""},
+  {cat:"Electrical",item:"Street light 60W LED (pole mounted)",unit:"pcs",rate:1200,note:""},
+  {cat:"Electrical",item:"Generator 2.5kVA petrol",unit:"pcs",rate:8500,note:""},
+  {cat:"Electrical",item:"Generator 6.5kVA petrol",unit:"pcs",rate:15000,note:""},
+  {cat:"Electrical",item:"Generator 12kVA diesel",unit:"pcs",rate:38000,note:""},
+  {cat:"Electrical",item:"Inverter 5kVA + 4×200Ah batteries",unit:"sets",rate:28000,note:"Backup power system"},
+  {cat:"Electrical",item:"Solar panel 400W monocrystalline",unit:"pcs",rate:2200,note:""},
+  {cat:"Electrical",item:"Solar system 3kW (complete, installed)",unit:"sets",rate:55000,note:""},
+  {cat:"Electrical",item:"CCTV camera (outdoor HD)",unit:"pcs",rate:850,note:""},
+  {cat:"Electrical",item:"CCTV 4-camera system complete",unit:"sets",rate:6500,note:""},
+  {cat:"Electrical",item:"Intercom / video doorbell",unit:"pcs",rate:1200,note:""},
+  {cat:"Electrical",item:"Automatic gate motor (sliding)",unit:"sets",rate:8500,note:""},
+  {cat:"Electrical",item:"AC unit 1HP split (incl. installation)",unit:"sets",rate:7500,note:""},
+  {cat:"Electrical",item:"AC unit 1.5HP split (incl. installation)",unit:"sets",rate:9500,note:""},
+  {cat:"Electrical",item:"AC unit 2HP split (incl. installation)",unit:"sets",rate:12000,note:""},
+
+  /* ── FINISHES: TILES ── */
+  {cat:"Finishes — Tiles",item:"Ceramic floor tile 300×300mm local",unit:"m²",rate:85,note:""},
+  {cat:"Finishes — Tiles",item:"Ceramic floor tile 600×600mm local",unit:"m²",rate:120,note:"PBCI tiles up 2026"},
+  {cat:"Finishes — Tiles",item:"Porcelain floor tile 600×600mm (import)",unit:"m²",rate:220,note:""},
+  {cat:"Finishes — Tiles",item:"Porcelain floor tile 800×800mm",unit:"m²",rate:350,note:""},
+  {cat:"Finishes — Tiles",item:"Porcelain tile 1200×600mm (large format)",unit:"m²",rate:480,note:""},
+  {cat:"Finishes — Tiles",item:"Ceramic wall tile 300×450mm local",unit:"m²",rate:95,note:""},
+  {cat:"Finishes — Tiles",item:"Ceramic wall tile 300×600mm",unit:"m²",rate:145,note:""},
+  {cat:"Finishes — Tiles",item:"Mosaic tile (m²)",unit:"m²",rate:280,note:""},
+  {cat:"Finishes — Tiles",item:"Terracotta tile (m²)",unit:"m²",rate:180,note:""},
+  {cat:"Finishes — Tiles",item:"Marble tile 600×600mm (imported)",unit:"m²",rate:650,note:""},
+  {cat:"Finishes — Tiles",item:"Granite tile 600×600mm (imported)",unit:"m²",rate:580,note:""},
+  {cat:"Finishes — Tiles",item:"Terrazzo tile (local, m²)",unit:"m²",rate:280,note:""},
+  {cat:"Finishes — Tiles",item:"Vinyl floor tile (m²)",unit:"m²",rate:95,note:"PVC plank"},
+  {cat:"Finishes — Tiles",item:"Anti-slip outdoor tile (m²)",unit:"m²",rate:180,note:""},
+  {cat:"Finishes — Tiles",item:"Pool tile (m²)",unit:"m²",rate:350,note:""},
+
+  /* ── FINISHES: PAINT & PLASTER ── */
+  {cat:"Finishes — Paint & Plaster",item:"Interior emulsion paint 20L (local)",unit:"pcs",rate:520,note:"Crown/Dulux local equiv."},
+  {cat:"Finishes — Paint & Plaster",item:"Interior emulsion paint 20L (import)",unit:"pcs",rate:850,note:"Dulux/Berger"},
+  {cat:"Finishes — Paint & Plaster",item:"Exterior masonry paint 20L (local)",unit:"pcs",rate:680,note:""},
+  {cat:"Finishes — Paint & Plaster",item:"Exterior masonry paint 20L (import)",unit:"pcs",rate:1100,note:""},
+  {cat:"Finishes — Paint & Plaster",item:"Gloss / eggshell 5L",unit:"pcs",rate:220,note:""},
+  {cat:"Finishes — Paint & Plaster",item:"Primer / undercoat 20L",unit:"pcs",rate:480,note:""},
+  {cat:"Finishes — Paint & Plaster",item:"Waterproof / Damp-proof paint 20L",unit:"pcs",rate:750,note:""},
+  {cat:"Finishes — Paint & Plaster",item:"Texture coat / Tyrolean (20kg)",unit:"pcs",rate:380,note:"Exterior finish"},
+  {cat:"Finishes — Paint & Plaster",item:"Cement plaster (bag) for rendering",unit:"bags",rate:95,note:"1 bag ~ 2m² at 15mm"},
+  {cat:"Finishes — Paint & Plaster",item:"Gypsum skim plaster (25kg)",unit:"bags",rate:180,note:"Interior smooth finish"},
+  {cat:"Finishes — Paint & Plaster",item:"Tile adhesive powder (25kg)",unit:"bags",rate:120,note:"Floor/wall tiles"},
+  {cat:"Finishes — Paint & Plaster",item:"Floor screeding mortar (m², 40mm)",unit:"m²",rate:75,note:"Incl. materials"},
+  {cat:"Finishes — Paint & Plaster",item:"POP ceiling (per m², incl. materials)",unit:"m²",rate:220,note:"Plaster of Paris"},
+  {cat:"Finishes — Paint & Plaster",item:"PVC ceiling panel (per m²)",unit:"m²",rate:180,note:"Local brand"},
+  {cat:"Finishes — Paint & Plaster",item:"Plasterboard ceiling (per m², incl. metal)",unit:"m²",rate:280,note:""},
+  {cat:"Finishes — Paint & Plaster",item:"Aluminium composite panel (m²)",unit:"m²",rate:750,note:"ACP cladding"},
+  {cat:"Finishes — Paint & Plaster",item:"Marble skirting (m, 100mm high)",unit:"m",rate:120,note:""},
+  {cat:"Finishes — Paint & Plaster",item:"PVC skirting (m)",unit:"m",rate:30,note:""},
+  {cat:"Finishes — Paint & Plaster",item:"Timber skirting hardwood (m)",unit:"m",rate:85,note:""},
+  {cat:"Finishes — Paint & Plaster",item:"Epoxy floor coating (m²)",unit:"m²",rate:180,note:"Industrial/garage"},
+  {cat:"Finishes — Paint & Plaster",item:"Floor hardener / dustproofer (m²)",unit:"m²",rate:55,note:""},
+
+  /* ── DOORS & WINDOWS ── */
+  {cat:"Doors & Windows",item:"Flush door hollow core 900×2100mm",unit:"pcs",rate:1100,note:"Local manufacture"},
+  {cat:"Doors & Windows",item:"Flush door solid core 900×2100mm",unit:"pcs",rate:2200,note:""},
+  {cat:"Doors & Windows",item:"Hardwood panel door 900×2100mm",unit:"pcs",rate:4500,note:"Wawa/sapele"},
+  {cat:"Doors & Windows",item:"Aluminium door frame (set)",unit:"sets",rate:650,note:""},
+  {cat:"Doors & Windows",item:"Timber door frame hardwood (set)",unit:"sets",rate:580,note:""},
+  {cat:"Doors & Windows",item:"Steel security door (external)",unit:"pcs",rate:4000,note:""},
+  {cat:"Doors & Windows",item:"Aluminium casement window 900×1200mm",unit:"pcs",rate:950,note:"Single glazed"},
+  {cat:"Doors & Windows",item:"Aluminium casement window 1200×1200mm",unit:"pcs",rate:1350,note:""},
+  {cat:"Doors & Windows",item:"Aluminium sliding window 1500×1200mm",unit:"pcs",rate:1600,note:""},
+  {cat:"Doors & Windows",item:"Aluminium sliding window 1800×1200mm",unit:"pcs",rate:1900,note:""},
+  {cat:"Doors & Windows",item:"uPVC window 1200×1200mm",unit:"pcs",rate:1800,note:"Double glazed optional"},
+  {cat:"Doors & Windows",item:"Aluminium sliding door 2100×2100mm",unit:"pcs",rate:5500,note:""},
+  {cat:"Doors & Windows",item:"Louver window (per m²)",unit:"m²",rate:420,note:"Frosted glass louvres"},
+  {cat:"Doors & Windows",item:"Burglar bars welded (m²)",unit:"m²",rate:400,note:"Mild steel, painted"},
+  {cat:"Doors & Windows",item:"Roller shutter door manual (m²)",unit:"m²",rate:1500,note:""},
+  {cat:"Doors & Windows",item:"Roller shutter motorised (m²)",unit:"m²",rate:2800,note:""},
+  {cat:"Doors & Windows",item:"Door lock mortice (brass)",unit:"pcs",rate:220,note:""},
+  {cat:"Doors & Windows",item:"Door lock (lever, chrome)",unit:"pcs",rate:150,note:""},
+  {cat:"Doors & Windows",item:"Padlock 60mm (heavy duty)",unit:"pcs",rate:120,note:""},
+  {cat:"Doors & Windows",item:"Window stay / handle (set)",unit:"sets",rate:65,note:""},
+  {cat:"Doors & Windows",item:"Hinges (pair, stainless)",unit:"pcs",rate:45,note:""},
+  {cat:"Doors & Windows",item:"Door closer (heavy duty)",unit:"pcs",rate:280,note:""},
+  {cat:"Doors & Windows",item:"Mosquito netting (m²)",unit:"m²",rate:55,note:"Aluminium mesh"},
+
+  /* ── WATERPROOFING & INSULATION ── */
+  {cat:"Waterproofing & Insulation",item:"Torch-on bitumen membrane 3mm (m²)",unit:"m²",rate:120,note:"Felt / flat roof"},
+  {cat:"Waterproofing & Insulation",item:"Torch-on bitumen membrane 4mm (m²)",unit:"m²",rate:155,note:""},
+  {cat:"Waterproofing & Insulation",item:"Crystalline waterproofing (m²)",unit:"m²",rate:150,note:"Penetrating type"},
+  {cat:"Waterproofing & Insulation",item:"Sika 101A waterproof admixture (3.5L)",unit:"pcs",rate:220,note:""},
+  {cat:"Waterproofing & Insulation",item:"DPC membrane (1000-gauge polythene, m²)",unit:"m²",rate:22,note:""},
+  {cat:"Waterproofing & Insulation",item:"Damp-proof course (strip, m)",unit:"m",rate:18,note:""},
+  {cat:"Waterproofing & Insulation",item:"EPS expanded polystyrene 50mm (m²)",unit:"m²",rate:95,note:"Roof insulation"},
+  {cat:"Waterproofing & Insulation",item:"Rockwool insulation 50mm (m²)",unit:"m²",rate:120,note:"Wall/roof"},
+  {cat:"Waterproofing & Insulation",item:"Reflective foil insulation (m²)",unit:"m²",rate:45,note:"Roof space"},
+  {cat:"Waterproofing & Insulation",item:"Tanking slurry (20kg)",unit:"bags",rate:350,note:"Basement waterproofing"},
+  {cat:"Waterproofing & Insulation",item:"Expansion joint sealant (600ml)",unit:"pcs",rate:85,note:"Polyurethane"},
+  {cat:"Waterproofing & Insulation",item:"Silicone sealant (300ml)",unit:"pcs",rate:55,note:""},
+  {cat:"Waterproofing & Insulation",item:"Bitumen paint (20L)",unit:"pcs",rate:380,note:"Foundation protection"},
+
+  /* ── EARTHWORKS & DRAINAGE ── */
+  {cat:"Earthworks & Drainage",item:"Excavation (hand, per m³)",unit:"m³",rate:100,note:"Typical 2026 rate"},
+  {cat:"Earthworks & Drainage",item:"Excavation (excavator hire per hr)",unit:"hr",rate:650,note:"JCB/CAT mini"},
+  {cat:"Earthworks & Drainage",item:"Bulldozer hire (per hr)",unit:"hr",rate:1200,note:""},
+  {cat:"Earthworks & Drainage",item:"Tipper truck hire (10-ton, trip)",unit:"pcs",rate:600,note:"Kumasi avg"},
+  {cat:"Earthworks & Drainage",item:"Road base compaction (roller, hr)",unit:"hr",rate:800,note:""},
+  {cat:"Earthworks & Drainage",item:"Concrete drain channel precast (m)",unit:"m",rate:320,note:""},
+  {cat:"Earthworks & Drainage",item:"Drainage inspection chamber (450mm)",unit:"pcs",rate:1200,note:""},
+  {cat:"Earthworks & Drainage",item:"Geotextile fabric (m²)",unit:"m²",rate:28,note:"Drainage/separation"},
+  {cat:"Earthworks & Drainage",item:"Soil investigation (borehole, per hole)",unit:"pcs",rate:12000,note:""},
+
+  /* ── LANDSCAPING & EXTERNAL ── */
+  {cat:"Landscaping & External",item:"Interlocking paving blocks 60mm (m²)",unit:"m²",rate:220,note:"Supply & lay"},
+  {cat:"Landscaping & External",item:"Block perimeter wall 1.8m high (m)",unit:"m",rate:1200,note:"Incl. foundation"},
+  {cat:"Landscaping & External",item:"Chainlink fence 1.8m high with posts (m)",unit:"m",rate:180,note:""},
+  {cat:"Landscaping & External",item:"Chainlink fence 2.4m high with posts (m)",unit:"m",rate:250,note:""},
+  {cat:"Landscaping & External",item:"Ornamental vehicle gate steel 3m",unit:"pcs",rate:12000,note:"Custom fabricated"},
+  {cat:"Landscaping & External",item:"Pedestrian gate steel 1m",unit:"pcs",rate:3500,note:""},
+  {cat:"Landscaping & External",item:"Driveway concrete slab 150mm (m²)",unit:"m²",rate:380,note:""},
+  {cat:"Landscaping & External",item:"Tarmac/Asphalt driveway (m²)",unit:"m²",rate:450,note:"50mm thick"},
+  {cat:"Landscaping & External",item:"Grass seeding/turfing (m²)",unit:"m²",rate:55,note:""},
+  {cat:"Landscaping & External",item:"Garden tap (outdoor bib)",unit:"pcs",rate:85,note:""},
+  {cat:"Landscaping & External",item:"Borehole (complete 30m, installed)",unit:"pcs",rate:45000,note:""},
+
+  /* ── IRONMONGERY & SUNDRIES ── */
+  {cat:"Ironmongery & Sundries",item:"Nails assorted 1kg",unit:"kg",rate:18,note:""},
+  {cat:"Ironmongery & Sundries",item:"Welding electrodes 2.5mm (kg)",unit:"kg",rate:70,note:""},
+  {cat:"Ironmongery & Sundries",item:"Welding electrodes 3.25mm (kg)",unit:"kg",rate:65,note:""},
+  {cat:"Ironmongery & Sundries",item:"Grinding disc 125mm (each)",unit:"pcs",rate:18,note:""},
+  {cat:"Ironmongery & Sundries",item:"Hacksaw blade (pack 10)",unit:"pcs",rate:45,note:""},
+  {cat:"Ironmongery & Sundries",item:"Builder's line / string line (100m)",unit:"rolls",rate:18,note:""},
+  {cat:"Ironmongery & Sundries",item:"Spirit level 1.2m",unit:"pcs",rate:280,note:""},
+  {cat:"Ironmongery & Sundries",item:"Shovel / spade",unit:"pcs",rate:80,note:""},
+  {cat:"Ironmongery & Sundries",item:"Wheelbarrow (heavy duty)",unit:"pcs",rate:480,note:""},
+  {cat:"Ironmongery & Sundries",item:"Scaffolding tube (hire per m per month)",unit:"m",rate:15,note:""},
+  {cat:"Ironmongery & Sundries",item:"Safety helmet",unit:"pcs",rate:85,note:""},
+  {cat:"Ironmongery & Sundries",item:"Safety boots (pair)",unit:"pcs",rate:180,note:""},
+  {cat:"Ironmongery & Sundries",item:"Safety gloves (pair)",unit:"pcs",rate:25,note:""},
+  {cat:"Ironmongery & Sundries",item:"Concrete vibrator (hire per day)",unit:"day",rate:220,note:""},
+  {cat:"Ironmongery & Sundries",item:"Concrete mixer 0.3m³ (hire per day)",unit:"day",rate:280,note:""},
+  {cat:"Ironmongery & Sundries",item:"Angle grinder (hire per day)",unit:"day",rate:120,note:""},
+  {cat:"Ironmongery & Sundries",item:"Generator hire (6.5kVA, per day)",unit:"day",rate:350,note:""},
+  {cat:"Ironmongery & Sundries",item:"Scaffolding (erect/dismantle per m²)",unit:"m²",rate:18,note:""},
+  {cat:"Ironmongery & Sundries",item:"First aid kit (site)",unit:"pcs",rate:250,note:""},
+  {cat:"Ironmongery & Sundries",item:"Fire extinguisher (6kg)",unit:"pcs",rate:380,note:""},
+  {cat:"Ironmongery & Sundries",item:"Masking tape (roll)",unit:"rolls",rate:12,note:""},
+  {cat:"Ironmongery & Sundries",item:"Sandpaper sheets (pack of 10)",unit:"pcs",rate:28,note:""},
+  {cat:"Ironmongery & Sundries",item:"Paint roller set",unit:"sets",rate:35,note:""},
+  {cat:"Ironmongery & Sundries",item:"Paint brush set (3-piece)",unit:"sets",rate:45,note:""},
+  {cat:"Ironmongery & Sundries",item:"HDPE sheeting 1000g (m²)",unit:"m²",rate:15,note:"Protection/DPC"},
+  {cat:"Ironmongery & Sundries",item:"Polypropylene rope (50m roll)",unit:"rolls",rate:55,note:""},
+  {cat:"Ironmongery & Sundries",item:"Surveying: Total station (hire per day)",unit:"day",rate:1500,note:""},
+  {cat:"Ironmongery & Sundries",item:"Surveying: Level instrument (hire per day)",unit:"day",rate:650,note:""},
+  {cat:"Ironmongery & Sundries",item:"Skip bin hire (8m³, per week)",unit:"pcs",rate:850,note:"Waste removal"},
+];
+
+/* ─── Expanded Labour Templates ──────────────────── */
+const LABOUR_TEMPLATES=[
+  /* Management */
+  {cat:"Management",role:"Project Manager",          days:90, workers:1, rate:600},
+  {cat:"Management",role:"Site Engineer",            days:90, workers:1, rate:500},
+  {cat:"Management",role:"Resident Engineer",        days:60, workers:1, rate:800},
+  {cat:"Management",role:"Site Foreman",             days:90, workers:1, rate:320},
+  {cat:"Management",role:"Quantity Surveyor",        days:30, workers:1, rate:750},
+  {cat:"Management",role:"Safety Officer (HSE)",     days:60, workers:1, rate:280},
+  {cat:"Management",role:"Site Clerk / Timekeeper",  days:90, workers:1, rate:180},
+  {cat:"Management",role:"Storekeeper",              days:90, workers:1, rate:150},
+  /* Structure */
+  {cat:"Structure",role:"Mason / Bricklayer",        days:45, workers:4, rate:180},
+  {cat:"Structure",role:"Steel Fixer",               days:20, workers:3, rate:200},
+  {cat:"Structure",role:"Concrete Crew (pour gang)",days:10,  workers:8, rate:160},
+  {cat:"Structure",role:"Carpenter (formwork)",      days:25, workers:3, rate:180},
+  {cat:"Structure",role:"Carpenter (joinery/fit-out)",days:20,workers:2, rate:190},
+  {cat:"Structure",role:"Blockwork Gang",            days:30, workers:6, rate:160},
+  /* Roofing */
+  {cat:"Roofing",role:"Roofer / Sheeter",           days:10, workers:4, rate:200},
+  {cat:"Roofing",role:"Steel Truss Installer",       days:5,  workers:4, rate:250},
+  {cat:"Roofing",role:"Gutter / Downpipe Fitter",   days:3,  workers:2, rate:160},
+  /* MEP */
+  {cat:"MEP",role:"Plumber (1st fix rough-in)",      days:12, workers:2, rate:220},
+  {cat:"MEP",role:"Plumber (2nd fix fit-out)",       days:8,  workers:2, rate:230},
+  {cat:"MEP",role:"Electrician (1st fix)",           days:12, workers:2, rate:240},
+  {cat:"MEP",role:"Electrician (2nd fix)",           days:8,  workers:2, rate:250},
+  {cat:"MEP",role:"HVAC / AC Technician",            days:6,  workers:2, rate:300},
+  {cat:"MEP",role:"Solar Installer",                 days:4,  workers:2, rate:350},
+  {cat:"MEP",role:"CCTV / Security Installer",      days:3,  workers:2, rate:280},
+  /* Finishes */
+  {cat:"Finishes",role:"Tiler (floor)",             days:12, workers:3, rate:180},
+  {cat:"Finishes",role:"Tiler (wall)",              days:8,  workers:2, rate:180},
+  {cat:"Finishes",role:"Plasterer / Renderer",      days:20, workers:4, rate:170},
+  {cat:"Finishes",role:"Screeder",                  days:8,  workers:3, rate:160},
+  {cat:"Finishes",role:"Painter (interior)",        days:14, workers:3, rate:150},
+  {cat:"Finishes",role:"Painter (exterior)",        days:8,  workers:3, rate:160},
+  {cat:"Finishes",role:"POP Ceiling Installer",     days:10, workers:2, rate:180},
+  {cat:"Finishes",role:"Glazier / Window Fitter",   days:5,  workers:2, rate:220},
+  {cat:"Finishes",role:"Welder / Fabricator",       days:8,  workers:2, rate:250},
+  {cat:"Finishes",role:"Joiner / Cabinet Maker",    days:10, workers:1, rate:280},
+  /* External */
+  {cat:"External",role:"Paver / Landscaper",        days:10, workers:4, rate:140},
+  {cat:"External",role:"Fencer / Gate Installer",   days:6,  workers:2, rate:180},
+  {cat:"External",role:"Drainage Layer",            days:8,  workers:3, rate:150},
+  {cat:"External",role:"Borehole Driller",          days:3,  workers:4, rate:400},
+  /* General */
+  {cat:"General",role:"General Labourer",           days:60, workers:8, rate:100},
+  {cat:"General",role:"Skilled Labourer",           days:45, workers:4, rate:130},
+  {cat:"General",role:"Concrete Vibrator Operator", days:5,  workers:1, rate:180},
+  {cat:"General",role:"Excavator Operator",         days:8,  workers:1, rate:450},
+  {cat:"General",role:"Crane Operator",             days:5,  workers:1, rate:650},
+  {cat:"General",role:"Tipper Driver",              days:15, workers:1, rate:280},
+  {cat:"General",role:"Concrete Mixer Operator",   days:10, workers:1, rate:160},
+  {cat:"General",role:"Watchman / Security (day)",  days:90, workers:1, rate:90},
+  {cat:"General",role:"Watchman / Security (night)",days:90, workers:1, rate:100},
+  {cat:"General",role:"Cleaner / Site Cleanup",     days:10, workers:2, rate:85},
+  {cat:"General",role:"Cook / Canteen Worker",      days:90, workers:1, rate:80},
+];
+
+/* ─── Utilities ──────────────────────────────────── */
+let _n=Date.now();
+const uid=()=>String(++_n);
+const sf=v=>{const n=parseFloat(v);return isNaN(n)?0:n;};
+const fmtN=n=>Number(n).toLocaleString("en-GH",{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtX=n=>Number(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:4});
+const today=()=>new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
+const isoDate=()=>new Date().toISOString().slice(0,10);
+const pad=(s,w)=>String(s).padEnd(w);
+const padL=(s,w)=>String(s).padStart(w);
+
+/* FX helpers — all internal values stored in GHS */
+function toGHS(amt,fromCurr,rates){return fromCurr==="GHS"?sf(amt):sf(amt)/(rates[fromCurr]||1);}
+function fromGHS(ghsAmt,toCurr,rates){return toCurr==="GHS"?ghsAmt:ghsAmt*(rates[toCurr]||1);}
+function crossConvert(amt,from,to,rates){return fromGHS(toGHS(amt,from,rates),to,rates);}
+
+const INP={background:NAVY,border:`1px solid ${BORDER}`,borderRadius:2,color:WHITE,fontFamily:"Courier New,monospace",fontSize:13,padding:"8px 10px",width:"100%",outline:"none"};
+const SEL={...INP,cursor:"pointer",appearance:"none"};
+const BTN_P={background:GOLD,color:NAVY,border:"none",fontFamily:"Courier New,monospace",fontSize:12,letterSpacing:"0.18em",textTransform:"uppercase",padding:"12px 22px",borderRadius:2,cursor:"pointer",fontWeight:700};
+const BTN_S={background:"none",border:`1px solid ${BORDER}`,color:MUTED,fontFamily:"Courier New,monospace",fontSize:11,letterSpacing:"0.15em",textTransform:"uppercase",padding:"11px 16px",borderRadius:2,cursor:"pointer"};
+const BTN_A={background:"none",border:`1px dashed rgba(201,168,76,0.3)`,color:GOLD_D,fontFamily:"Courier New,monospace",fontSize:11,letterSpacing:"0.15em",textTransform:"uppercase",padding:"9px 18px",borderRadius:2,cursor:"pointer",marginTop:8};
+
+function Sec({title,children}){return(
+  <div style={{background:NAVY_M,border:`1px solid ${BORDER}`,borderRadius:4,padding:"22px 24px",marginBottom:14,position:"relative",overflow:"hidden"}}>
+    <div style={{position:"absolute",top:0,left:0,width:4,height:"100%",background:`linear-gradient(180deg,${GOLD},transparent)`}}/>
+    {title&&<div style={{fontFamily:"Courier New,monospace",fontSize:10,letterSpacing:"0.25em",textTransform:"uppercase",color:GOLD,marginBottom:14,display:"flex",alignItems:"center",gap:10}}>
+      {title}<div style={{flex:1,height:1,background:BORDER}}/></div>}
+    {children}
+  </div>
+);}
+
+function SumBox({label,val,accent,color,sub}){return(
+  <div style={{background:NAVY,border:`1px solid ${accent?GOLD:BORDER}`,borderRadius:3,padding:"12px 15px",flex:"1 1 120px"}}>
+    <div style={{fontFamily:"Courier New",fontSize:9,letterSpacing:"0.2em",textTransform:"uppercase",color:MUTED,marginBottom:3}}>{label}</div>
+    <div style={{fontFamily:"Georgia,serif",fontSize:accent?16:13,fontWeight:700,color:accent?GOLD_L:(color||WHITE)}}>{val}</div>
+    {sub&&<div style={{fontFamily:"Courier New",fontSize:9,color:MUTED,marginTop:3}}>{sub}</div>}
+  </div>
+);}
+
+function DelBtn({onClick}){return <button onClick={onClick} style={{background:"none",border:`1px solid rgba(224,90,90,0.3)`,color:DANGER,width:28,height:28,borderRadius:2,cursor:"pointer",fontSize:15,lineHeight:1}}>×</button>;}
+function Label({children}){return <label style={{fontFamily:"Courier New",fontSize:10,letterSpacing:"0.15em",textTransform:"uppercase",color:MUTED,display:"block",marginBottom:5}}>{children}</label>;}
+function Field({label,children,style}){return <div style={{display:"flex",flexDirection:"column",...style}}><Label>{label}</Label>{children}</div>;}
+
+function MobileModal({content,onClose,title}){
+  const [copied,setCopied]=useState(false);
+  const doCopy=()=>{navigator.clipboard.writeText(content).then(()=>setCopied(true)).catch(()=>{try{const el=document.getElementById("_mta");el.select();document.execCommand("copy");setCopied(true);}catch(e){}});};
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(10,22,40,0.97)",zIndex:9999,display:"flex",flexDirection:"column",padding:20,gap:12}}>
+      <div style={{fontFamily:"Courier New",fontSize:11,letterSpacing:"0.2em",textTransform:"uppercase",color:GOLD}}>⎙ {title}</div>
+      <div style={{fontSize:13,color:MUTED}}>Tap <strong style={{color:WHITE}}>Copy</strong> then paste into Notes, WhatsApp, or Email.</div>
+      <textarea id="_mta" readOnly value={content} style={{flex:1,background:NAVY_M,color:WHITE,border:`1px solid ${BORDER}`,borderRadius:3,fontFamily:"Courier New",fontSize:11,padding:12,resize:"none",outline:"none",lineHeight:1.6}}/>
+      <div style={{display:"flex",gap:10}}><button onClick={doCopy} style={{...BTN_P,flex:1}}>⧉ Copy</button><button onClick={onClose} style={BTN_S}>Close</button></div>
+      {copied&&<div style={{fontFamily:"Courier New",fontSize:11,color:OK,textAlign:"center"}}>✓ Copied!</div>}
+    </div>
+  );
+}
+
+function downloadOrModal(content,filename,setModal){
+  try{const blob=new Blob([content],{type:"text/plain"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=filename;a.click();URL.revokeObjectURL(url);}
+  catch(e){setModal(content);}
+}
+function printHTML(html){const w=window.open("","_blank");if(!w)return;w.document.write(html);w.document.close();w.focus();setTimeout(()=>w.print(),500);}
+
+function BarChart({data,sym,cv}){
+  if(!data||!data.length)return null;
+  const max=Math.max(...data.map(d=>d.val),1);
+  return(
+    <div style={{marginTop:16}}>
+      {data.map(({label,val,color})=>(
+        <div key={label} style={{marginBottom:10}}>
+          <div style={{display:"flex",justifyContent:"space-between",fontFamily:"Courier New",fontSize:11,marginBottom:4}}>
+            <span style={{color:MUTED}}>{label}</span>
+            <span style={{color:WHITE}}>{sym} {fmtX(cv(val))}</span>
+          </div>
+          <div style={{background:NAVY,borderRadius:2,height:10,overflow:"hidden"}}>
+            <div style={{height:"100%",width:`${(val/max)*100}%`,background:color,borderRadius:2,transition:"width 0.6s ease"}}/>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════
+   CURRENCY PANEL
+══════════════════════════════════════════════════════ */
+function CurrencyPanel({display,setDisplay,rates,setRates,rateStatus,refreshRates}){
+  const [editing,setEditing]=useState(false);
+  const [draft,setDraft]=useState({});
+
+  const startEdit=()=>{
+    const d={};
+    CURRS.filter(c=>c!=="GHS").forEach(c=>d[c]=String((1/rates[c]).toFixed(4)));
+    setDraft(d);setEditing(true);
+  };
+  const applyEdit=()=>{
+    const nr={GHS:1};
+    CURRS.filter(c=>c!=="GHS").forEach(c=>{const v=sf(draft[c]);if(v>0)nr[c]=1/v;else nr[c]=rates[c];});
+    setRates(nr);setEditing(false);
+  };
+
+  return(
+    <Sec title="Exchange Rates & Currency">
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:14}}>
+        {CURRS.map(c=>{
+          const ghsVal=c==="GHS"?1:(1/rates[c]);
+          return(
+            <div key={c} onClick={()=>setDisplay(c)} style={{background:display===c?"rgba(201,168,76,0.1)":NAVY,border:`1px solid ${display===c?GOLD:BORDER}`,borderRadius:3,padding:"10px 12px",cursor:"pointer",transition:"all 0.2s"}}>
+              <div style={{fontFamily:"Courier New",fontSize:9,letterSpacing:"0.2em",textTransform:"uppercase",color:display===c?GOLD:MUTED,marginBottom:4}}>{CURR_FLAGS[c]} {c}</div>
+              <div style={{fontFamily:"Georgia,serif",fontSize:15,fontWeight:700,color:display===c?GOLD_L:WHITE}}>
+                {c==="GHS"?"1.0000":fmtX(ghsVal)}
+              </div>
+              <div style={{fontFamily:"Courier New",fontSize:9,color:MUTED,marginTop:2}}>GHS per 1 {c}</div>
+            </div>
+          );
+        })}
+      </div>
+      {editing?(
+        <div style={{background:NAVY,border:`1px solid ${BORDER}`,borderRadius:3,padding:"14px 16px",marginBottom:12}}>
+          <div style={{fontFamily:"Courier New",fontSize:10,letterSpacing:"0.15em",textTransform:"uppercase",color:GOLD,marginBottom:10}}>Override Rates — GHS per 1 unit of foreign currency</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:12}}>
+            {CURRS.filter(c=>c!=="GHS").map(c=>(
+              <Field key={c} label={`1 ${c} = ? GHS`}>
+                <input style={INP} type="number" value={draft[c]} step="0.01" min="0.01" onChange={e=>setDraft(d=>({...d,[c]:e.target.value}))}/>
+              </Field>
+            ))}
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <button style={{...BTN_P,padding:"9px 16px"}} onClick={applyEdit}>✓ Apply</button>
+            <button style={BTN_S} onClick={()=>setEditing(false)}>Cancel</button>
+          </div>
+        </div>
+      ):(
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+          <button style={{...BTN_S,borderColor:GOLD,color:GOLD}} onClick={refreshRates}>⟳ Fetch Live Rates</button>
+          <button style={BTN_S} onClick={startEdit}>✎ Override Manually</button>
+          <div style={{fontFamily:"Courier New",fontSize:10,color:MUTED}}>{rateStatus}</div>
+        </div>
+      )}
+      {/* Cross rate table */}
+      <div style={{marginTop:14,overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",minWidth:320}}>
+          <thead><tr>
+            <th style={{fontFamily:"Courier New",fontSize:9,letterSpacing:"0.18em",textTransform:"uppercase",color:GOLD_D,padding:"0 8px 6px",textAlign:"left",borderBottom:`1px solid ${BORDER}`}}>1 →</th>
+            {CURRS.map(c=><th key={c} style={{fontFamily:"Courier New",fontSize:9,letterSpacing:"0.18em",textTransform:"uppercase",color:GOLD_D,padding:"0 8px 6px",textAlign:"right",borderBottom:`1px solid ${BORDER}`}}>{c}</th>)}
+          </tr></thead>
+          <tbody>
+            {CURRS.map(from=>(
+              <tr key={from} style={{borderBottom:`1px solid rgba(201,168,76,0.05)`}}>
+                <td style={{fontFamily:"Courier New",fontSize:11,color:GOLD,padding:"6px 8px"}}>{from}</td>
+                {CURRS.map(to=>{
+                  const val=crossConvert(1,from,to,rates);
+                  return(
+                    <td key={to} style={{fontFamily:"Courier New",fontSize:11,color:from===to?GOLD_D:WHITE,padding:"6px 8px",textAlign:"right",background:from===to?"rgba(201,168,76,0.04)":"transparent"}}>
+                      {from===to?"—":fmtX(val)}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div style={{fontFamily:"Courier New",fontSize:9,color:MUTED,marginTop:6,textAlign:"right"}}>Via GHS base. Click ⟳ to update. Rates indicative only.</div>
+      </div>
+    </Sec>
+  );
+}
+
+/* ══════════════════════════════════════════════════════
+   COST ESTIMATOR
+══════════════════════════════════════════════════════ */
+function CostEstimator({display,rates,projName,client,loc,ptype,onSave,savedData}){
+  const [oh,setOh]=useState("10");
+  const [con,setCon]=useState("5");
+  const [vat,setVat]=useState("0");
+  const [mats,setMats]=useState([]);
+  const [labs,setLabs]=useState([]);
+  const [modal,setModal]=useState(null);
+  const [dbOpen,setDbOpen]=useState(false);
+  const [dbCat,setDbCat]=useState("All");
+  const [dbSearch,setDbSearch]=useState("");
+  const [labOpen,setLabOpen]=useState(false);
+  const [labCat,setLabCat]=useState("All");
+  const [saveMsg,setSaveMsg]=useState("");
+
+  useEffect(()=>{
+    if(savedData&&(savedData.mats||savedData.labs)){
+      setMats(savedData.mats||[]);setLabs(savedData.labs||[]);
+      setOh(savedData.oh||"10");setCon(savedData.con||"5");setVat(savedData.vat||"0");
+    } else {
+      setMats([
+        {id:uid(),item:"GHACEM Cement 42.5R (50kg bag)",qty:100,unit:"bags",rate:88,cur:"GHS"},
+        {id:uid(),item:"Sharp sand (filling grade, ton)",qty:20,unit:"tons",rate:300,cur:"GHS"},
+        {id:uid(),item:"Granite chippings 3/4\" (ton)",qty:15,unit:"tons",rate:380,cur:"GHS"},
+        {id:uid(),item:"Y12 high tensile (12m)",qty:50,unit:"pcs",rate:85,cur:"GHS"},
+        {id:uid(),item:"Sandcrete block 6\" solid",qty:2000,unit:"pcs",rate:14,cur:"GHS"},
+      ]);
+      setLabs([
+        {id:uid(),role:"Mason / Bricklayer",days:45,workers:4,rate:180,cur:"GHS"},
+        {id:uid(),role:"General Labourer",days:60,workers:6,rate:100,cur:"GHS"},
+      ]);
+    }
+  },[]);
+
+  const cv=n=>fromGHS(n,display,rates);
+  const sym=display;
+  const fm=n=>`${sym} ${fmtX(cv(n))}`;
+
+  const matGHS=mats.reduce((s,r)=>s+toGHS(sf(r.qty)*sf(r.rate),r.cur||"GHS",rates),0);
+  const labGHS=labs.reduce((s,r)=>s+toGHS(sf(r.days)*sf(r.workers)*sf(r.rate),r.cur||"GHS",rates),0);
+  const dirGHS=matGHS+labGHS;
+  const ohAmt=dirGHS*sf(oh)/100,conAmt=(dirGHS+ohAmt)*sf(con)/100;
+  const sub=dirGHS+ohAmt+conAmt,vatAmt=sub*sf(vat)/100,totalGHS=sub+vatAmt;
+
+  const cats=["All",...new Set(GH_PRICES.map(p=>p.cat))];
+  const labCats=["All",...new Set(LABOUR_TEMPLATES.map(t=>t.cat))];
+  const fDb=GH_PRICES.filter(p=>(dbCat==="All"||p.cat===dbCat)&&(p.item.toLowerCase().includes(dbSearch.toLowerCase())||p.cat.toLowerCase().includes(dbSearch.toLowerCase())||p.note.toLowerCase().includes(dbSearch.toLowerCase())));
+  const fLab=LABOUR_TEMPLATES.filter(t=>labCat==="All"||t.cat===labCat);
+
+  const handleSave=()=>{onSave({mats,labs,oh,con,vat});setSaveMsg("✓ Saved!");setTimeout(()=>setSaveMsg(""),2000);};
+
+  const chartData=[{label:"Materials",val:matGHS,color:BLUE},{label:"Labour",val:labGHS,color:OK},{label:"Overhead",val:ohAmt,color:ORANGE},{label:"Contingency",val:conAmt,color:GOLD},...(vatAmt>0?[{label:"VAT/Tax",val:vatAmt,color:PURPLE}]:[])];
+
+  const buildPrintHTML=()=>{
+    const maxB=Math.max(...chartData.map(d=>d.val),1);
+    const barsHTML=chartData.map(d=>`<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px"><span style="color:#555">${d.label}</span><span>${fm(d.val)}${display!=="GHS"?` (GHS ${fmtN(d.val)})`:""}</span></div><div style="background:#e5e7eb;height:12px;border-radius:3px;overflow:hidden"><div style="height:100%;width:${(d.val/maxB)*100}%;background:${d.color};border-radius:3px"></div></div></div>`).join("");
+    const fxNote=display!=="GHS"?`<p style="font-size:11px;color:#6b7280">Rates: 1 USD=GHS ${fmtX(1/rates.USD)}, 1 GBP=GHS ${fmtX(1/rates.GBP)}, 1 EUR=GHS ${fmtX(1/rates.EUR)} (${today()})</p>`:"";
+    return`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Cost Estimate</title><style>body{font-family:Arial,sans-serif;padding:32px;color:#111;margin:0}.hdr{border-bottom:3px solid #c9a84c;padding-bottom:16px;margin-bottom:24px}.co{font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:#c9a84c;font-weight:700}h1{font-size:22px;color:#0a1628;margin:6px 0}.meta{font-size:12px;color:#6b7280;margin-top:6px}table{width:100%;border-collapse:collapse;margin-bottom:20px}th{background:#0a1628;color:#c9a84c;padding:9px 10px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;text-align:left}td{padding:8px 10px;border-bottom:1px solid #e5e7eb;font-size:13px}tr:nth-child(even)td{background:#f9fafb}.stotal td{font-weight:700;background:#f3f4f6}.grand{background:#0a1628!important;color:#e8c97a;font-weight:700;font-size:14px}.sec-hdr{font-weight:700;font-size:12px;text-transform:uppercase;color:#374151;padding:10px;background:#f3f4f6;border-top:2px solid #c9a84c}.two-col{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:20px}.box{border:1px solid #e5e7eb;padding:16px;border-radius:4px}.box-title{font-size:11px;text-transform:uppercase;color:#c9a84c;font-weight:700;margin-bottom:10px}.footer{margin-top:32px;font-size:11px;color:#9ca3af;text-align:center;border-top:1px solid #e5e7eb;padding-top:14px}@media print{body{padding:15px}}</style></head><body>
+    <div class="hdr"><div class="co">TuoBuilds Consult</div><h1>Cost Estimate Report</h1><div class="meta"><strong>${projName||"Unnamed Project"}</strong>${client?" · "+client:""}${loc?" · "+loc:""} · ${ptype} · ${today()}</div>${fxNote}</div>
+    <table><thead><tr><th>Item</th><th>Qty</th><th>Unit</th><th style="text-align:right">Rate</th><th style="text-align:right">Total (${sym})</th></tr></thead><tbody>
+    <tr><td colspan="5" class="sec-hdr">Materials</td></tr>
+    ${mats.map(r=>{const tGHS=toGHS(sf(r.qty)*sf(r.rate),r.cur||"GHS",rates);return`<tr><td>${r.item}</td><td>${r.qty}</td><td>${r.unit}</td><td style="text-align:right;font-family:monospace">${r.cur||"GHS"} ${fmtX(sf(r.rate))}</td><td style="text-align:right;font-family:monospace">${fm(tGHS)}</td></tr>`;}).join("")}
+    <tr class="stotal"><td colspan="4" style="text-align:right">Materials Subtotal</td><td style="text-align:right;font-family:monospace">${fm(matGHS)}</td></tr>
+    <tr><td colspan="5" class="sec-hdr">Labour</td></tr>
+    ${labs.map(r=>{const tGHS=toGHS(sf(r.days)*sf(r.workers)*sf(r.rate),r.cur||"GHS",rates);return`<tr><td>${r.role}</td><td>${r.days}d × ${r.workers}w</td><td>—</td><td style="text-align:right;font-family:monospace">${r.cur||"GHS"} ${fmtX(sf(r.rate))}/day</td><td style="text-align:right;font-family:monospace">${fm(tGHS)}</td></tr>`;}).join("")}
+    <tr class="stotal"><td colspan="4" style="text-align:right">Labour Subtotal</td><td style="text-align:right;font-family:monospace">${fm(labGHS)}</td></tr>
+    <tr><td colspan="4">Overhead (${sf(oh).toFixed(1)}%)</td><td style="text-align:right;font-family:monospace">${fm(ohAmt)}</td></tr>
+    <tr><td colspan="4">Contingency (${sf(con).toFixed(1)}%)</td><td style="text-align:right;font-family:monospace">${fm(conAmt)}</td></tr>
+    ${vatAmt>0?`<tr><td colspan="4">VAT/Tax (${sf(vat).toFixed(1)}%)</td><td style="text-align:right;font-family:monospace">${fm(vatAmt)}</td></tr>`:""}
+    <tr><td colspan="4" class="grand" style="text-align:right">TOTAL ESTIMATED COST</td><td class="grand" style="text-align:right;font-family:monospace">${fm(totalGHS)}</td></tr>
+    </tbody></table>
+    <div class="two-col"><div class="box"><div class="box-title">Cost Breakdown</div>${barsHTML}</div>
+    <div class="box"><div class="box-title">Summary</div>${[["Materials",matGHS,BLUE],["Labour",labGHS,OK],["Overhead",ohAmt,ORANGE],["Contingency",conAmt,GOLD],...(vatAmt>0?[["VAT/Tax",vatAmt,PURPLE]]:[]),["TOTAL",totalGHS,GOLD]].map(([l,v,c])=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f0f0f0"><span style="font-size:12px;color:#555">${l}</span><span style="font-family:monospace;font-size:12px;font-weight:${l==="TOTAL"?700:400};color:${l==="TOTAL"?"#c9a84c":"#111"}">${fm(v)}</span></div>`).join("")}</div></div>
+    <div class="footer">TuoBuilds Consult | Civil & Structural Engineering | Generated ${today()} | Prices sourced: BusyList, NewsGhana, Troysteel, GSS PBCI Jan 2026</div></body></html>`;
+  };
+
+  const TH={fontFamily:"Courier New,monospace",fontSize:10,letterSpacing:"0.18em",textTransform:"uppercase",color:GOLD_D,padding:"0 6px 8px",textAlign:"left",borderBottom:`1px solid ${BORDER}`};
+  const TD={padding:"5px 6px",verticalAlign:"middle"};
+  const RB={borderBottom:`1px solid rgba(201,168,76,0.07)`};
+
+  return(
+    <div>
+      {/* Material DB */}
+      {dbOpen&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(10,22,40,0.97)",zIndex:900,display:"flex",flexDirection:"column",padding:20,gap:12}}>
+          <div style={{fontFamily:"Courier New",fontSize:11,letterSpacing:"0.2em",textTransform:"uppercase",color:GOLD}}>
+            📦 Ghana Material Price DB — {GH_PRICES.length} items · Updated May 2026
+          </div>
+          <div style={{fontFamily:"Courier New",fontSize:9,color:MUTED}}>
+            Sources: BusyList, NewsGhana Nov 2025, Troysteel 2025, Added Supplies 2026, GSS Prime Building Cost Index Jan 2026. Display: {sym}. Rates auto-converted.
+          </div>
+          <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+            <input style={{...INP,flex:1,minWidth:180}} value={dbSearch} placeholder="Search items, categories, notes..." onChange={e=>setDbSearch(e.target.value)}/>
+            <select style={{...SEL,width:200}} value={dbCat} onChange={e=>setDbCat(e.target.value)}>{cats.map(c=><option key={c}>{c}</option>)}</select>
+            <button onClick={()=>setDbOpen(false)} style={BTN_S}>✕ Close</button>
+          </div>
+          <div style={{flex:1,overflowY:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse"}}>
+              <thead><tr>
+                <th style={{...TH,position:"sticky",top:0,background:NAVY_M}}>Item</th>
+                <th style={{...TH,width:65,position:"sticky",top:0,background:NAVY_M}}>Unit</th>
+                <th style={{...TH,width:115,position:"sticky",top:0,background:NAVY_M,textAlign:"right"}}>Rate ({sym})</th>
+                <th style={{...TH,width:70,position:"sticky",top:0,background:NAVY_M}}/>
+              </tr></thead>
+              <tbody>{fDb.map((p,i)=>(
+                <tr key={i} style={RB}>
+                  <td style={TD}>
+                    <div style={{fontFamily:"Courier New",fontSize:12,color:WHITE}}>{p.item}</div>
+                    <div style={{fontSize:10,color:MUTED}}>{p.cat}{p.note?" · "+p.note:""}</div>
+                  </td>
+                  <td style={{...TD,fontFamily:"Courier New",fontSize:11,color:MUTED}}>{p.unit}</td>
+                  <td style={{...TD,textAlign:"right"}}>
+                    <div style={{fontFamily:"Courier New",fontSize:12,color:GOLD_L}}>{sym} {fmtX(cv(p.rate))}</div>
+                    {display!=="GHS"&&<div style={{fontSize:9,color:MUTED}}>GHS {fmtN(p.rate)}</div>}
+                  </td>
+                  <td style={TD}>
+                    <button onClick={()=>setMats(rs=>[...rs,{id:uid(),item:p.item,qty:1,unit:p.unit,rate:p.rate,cur:"GHS"}])} style={{...BTN_P,padding:"6px 12px",fontSize:10}}>＋</button>
+                  </td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Labour Templates */}
+      {labOpen&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(10,22,40,0.97)",zIndex:900,display:"flex",flexDirection:"column",padding:20,gap:12}}>
+          <div style={{fontFamily:"Courier New",fontSize:11,letterSpacing:"0.2em",textTransform:"uppercase",color:GOLD}}>👷 Labour Templates — {LABOUR_TEMPLATES.length} trades · GSS PBCI Jan 2026</div>
+          <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+            <select style={{...SEL,width:180}} value={labCat} onChange={e=>setLabCat(e.target.value)}>{labCats.map(c=><option key={c}>{c}</option>)}</select>
+            <button onClick={()=>setLabOpen(false)} style={BTN_S}>✕ Close</button>
+          </div>
+          <div style={{flex:1,overflowY:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse"}}>
+              <thead><tr><th style={TH}>Role</th><th style={{...TH,width:50}}>Days</th><th style={{...TH,width:65}}>Workers</th><th style={{...TH,width:115,textAlign:"right"}}>Rate/Day ({sym})</th><th style={{...TH,width:115,textAlign:"right"}}>Est. Total ({sym})</th><th style={{...TH,width:70}}/></tr></thead>
+              <tbody>{fLab.map((t,i)=>{
+                const tGHS=t.days*t.workers*t.rate;
+                return(
+                  <tr key={i} style={RB}>
+                    <td style={TD}><div style={{fontFamily:"Courier New",fontSize:12,color:WHITE}}>{t.role}</div><div style={{fontSize:10,color:MUTED}}>{t.cat}</div></td>
+                    <td style={{...TD,fontFamily:"Courier New",fontSize:11,color:MUTED}}>{t.days}</td>
+                    <td style={{...TD,fontFamily:"Courier New",fontSize:11,color:MUTED}}>{t.workers}</td>
+                    <td style={{...TD,textAlign:"right"}}>
+                      <div style={{fontFamily:"Courier New",fontSize:12,color:GOLD_L}}>{sym} {fmtX(cv(t.rate))}</div>
+                      {display!=="GHS"&&<div style={{fontSize:9,color:MUTED}}>GHS {fmtN(t.rate)}</div>}
+                    </td>
+                    <td style={{...TD,textAlign:"right"}}>
+                      <div style={{fontFamily:"Courier New",fontSize:12,color:WHITE}}>{sym} {fmtX(cv(tGHS))}</div>
+                      {display!=="GHS"&&<div style={{fontSize:9,color:MUTED}}>GHS {fmtN(tGHS)}</div>}
+                    </td>
+                    <td style={TD}><button onClick={()=>setLabs(rs=>[...rs,{id:uid(),role:t.role,days:t.days,workers:t.workers,rate:t.rate,cur:"GHS"}])} style={{...BTN_P,padding:"6px 12px",fontSize:10}}>＋ Add</button></td>
+                  </tr>
+                );
+              })}</tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <Sec title="Materials">
+        <div style={{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap"}}>
+          <button style={{...BTN_S,borderColor:GOLD,color:GOLD}} onClick={()=>setDbOpen(true)}>📦 Ghana Price DB ({GH_PRICES.length} items · May 2026)</button>
+        </div>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",minWidth:540}}>
+            <thead><tr>
+              <th style={TH}>Item</th><th style={{...TH,width:62}}>Qty</th>
+              <th style={{...TH,width:80}}>Unit</th><th style={{...TH,width:75}}>In</th>
+              <th style={{...TH,width:105}}>Rate (input)</th>
+              <th style={{...TH,width:120,textAlign:"right"}}>Total ({sym})</th>
+              <th style={{...TH,width:30}}/>
+            </tr></thead>
+            <tbody>{mats.map(row=>{
+              const tGHS=toGHS(sf(row.qty)*sf(row.rate),row.cur||"GHS",rates);
+              return(
+                <tr key={row.id} style={RB}>
+                  <td style={TD}><input style={INP} value={row.item} placeholder="Item" onChange={e=>setMats(rs=>rs.map(r=>r.id===row.id?{...r,item:e.target.value}:r))}/></td>
+                  <td style={TD}><input style={INP} type="number" value={row.qty} min={0} onChange={e=>setMats(rs=>rs.map(r=>r.id===row.id?{...r,qty:e.target.value}:r))}/></td>
+                  <td style={TD}><select style={SEL} value={row.unit} onChange={e=>setMats(rs=>rs.map(r=>r.id===row.id?{...r,unit:e.target.value}:r))}>{UNITS.map(u=><option key={u}>{u}</option>)}</select></td>
+                  <td style={TD}><select style={{...SEL,fontSize:11}} value={row.cur||"GHS"} onChange={e=>setMats(rs=>rs.map(r=>r.id===row.id?{...r,cur:e.target.value}:r))}>{CURRS.map(c=><option key={c}>{c}</option>)}</select></td>
+                  <td style={TD}><input style={INP} type="number" value={row.rate} min={0} onChange={e=>setMats(rs=>rs.map(r=>r.id===row.id?{...r,rate:e.target.value}:r))}/></td>
+                  <td style={{...TD,textAlign:"right",whiteSpace:"nowrap"}}>
+                    <div style={{fontFamily:"Courier New",fontSize:12,color:GOLD_L}}>{sym} {fmtX(cv(tGHS))}</div>
+                    {display!=="GHS"&&<div style={{fontSize:9,color:MUTED}}>GHS {fmtN(tGHS)}</div>}
+                  </td>
+                  <td style={TD}><DelBtn onClick={()=>setMats(rs=>rs.filter(r=>r.id!==row.id))}/></td>
+                </tr>
+              );
+            })}</tbody>
+          </table>
+        </div>
+        <button style={BTN_A} onClick={()=>setMats(rs=>[...rs,{id:uid(),item:"",qty:1,unit:"bags",rate:0,cur:display}])}>＋ Add Row</button>
+      </Sec>
+
+      <Sec title="Labour">
+        <div style={{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap"}}>
+          <button style={{...BTN_S,borderColor:GOLD,color:GOLD}} onClick={()=>setLabOpen(true)}>👷 Labour Templates ({LABOUR_TEMPLATES.length} trades · GSS PBCI 2026)</button>
+        </div>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",minWidth:540}}>
+            <thead><tr>
+              <th style={TH}>Role</th><th style={{...TH,width:55}}>Days</th>
+              <th style={{...TH,width:65}}>Workers</th><th style={{...TH,width:75}}>In</th>
+              <th style={{...TH,width:105}}>Rate/Day</th>
+              <th style={{...TH,width:120,textAlign:"right"}}>Total ({sym})</th>
+              <th style={{...TH,width:30}}/>
+            </tr></thead>
+            <tbody>{labs.map(row=>{
+              const tGHS=toGHS(sf(row.days)*sf(row.workers)*sf(row.rate),row.cur||"GHS",rates);
+              return(
+                <tr key={row.id} style={RB}>
+                  <td style={TD}><input style={INP} value={row.role} placeholder="e.g. Mason" onChange={e=>setLabs(rs=>rs.map(r=>r.id===row.id?{...r,role:e.target.value}:r))}/></td>
+                  <td style={TD}><input style={INP} type="number" value={row.days} min={0} onChange={e=>setLabs(rs=>rs.map(r=>r.id===row.id?{...r,days:e.target.value}:r))}/></td>
+                  <td style={TD}><input style={INP} type="number" value={row.workers} min={1} onChange={e=>setLabs(rs=>rs.map(r=>r.id===row.id?{...r,workers:e.target.value}:r))}/></td>
+                  <td style={TD}><select style={{...SEL,fontSize:11}} value={row.cur||"GHS"} onChange={e=>setLabs(rs=>rs.map(r=>r.id===row.id?{...r,cur:e.target.value}:r))}>{CURRS.map(c=><option key={c}>{c}</option>)}</select></td>
+                  <td style={TD}><input style={INP} type="number" value={row.rate} min={0} onChange={e=>setLabs(rs=>rs.map(r=>r.id===row.id?{...r,rate:e.target.value}:r))}/></td>
+                  <td style={{...TD,textAlign:"right",whiteSpace:"nowrap"}}>
+                    <div style={{fontFamily:"Courier New",fontSize:12,color:GOLD_L}}>{sym} {fmtX(cv(tGHS))}</div>
+                    {display!=="GHS"&&<div style={{fontSize:9,color:MUTED}}>GHS {fmtN(tGHS)}</div>}
+                  </td>
+                  <td style={TD}><DelBtn onClick={()=>setLabs(rs=>rs.filter(r=>r.id!==row.id))}/></td>
+                </tr>
+              );
+            })}</tbody>
+          </table>
+        </div>
+        <button style={BTN_A} onClick={()=>setLabs(rs=>[...rs,{id:uid(),role:"",days:1,workers:1,rate:0,cur:display}])}>＋ Add Row</button>
+      </Sec>
+
+      <Sec title="Overhead & Margins">
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14}}>
+          {[["Overhead (%)",oh,setOh],["Contingency (%)",con,setCon],["VAT / Tax (%)",vat,setVat]].map(([l,v,s])=>(
+            <Field key={l} label={l}><input style={INP} type="number" value={v} min={0} onChange={e=>s(e.target.value)}/></Field>
+          ))}
+        </div>
+      </Sec>
+
+      <Sec title={`Live Summary — ${sym}`}>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:14}}>
+          <SumBox label="Materials" val={`${sym} ${fmtX(cv(matGHS))}`} sub={display!=="GHS"?`GHS ${fmtN(matGHS)}`:null}/>
+          <SumBox label="Labour"    val={`${sym} ${fmtX(cv(labGHS))}`} sub={display!=="GHS"?`GHS ${fmtN(labGHS)}`:null}/>
+          <SumBox label="Direct"    val={`${sym} ${fmtX(cv(dirGHS))}`} sub={display!=="GHS"?`GHS ${fmtN(dirGHS)}`:null}/>
+          <SumBox label={`Total (${sym})`} val={`${sym} ${fmtX(cv(totalGHS))}`} sub={display!=="GHS"?`GHS ${fmtN(totalGHS)}`:null} accent/>
+        </div>
+        <BarChart data={chartData} sym={sym} cv={cv}/>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:16}}>
+          <button style={BTN_P} onClick={()=>printHTML(buildPrintHTML())}>🖨 Print / PDF Report</button>
+          <button style={BTN_S} onClick={handleSave}>💾 Save</button>
+          {saveMsg&&<span style={{fontFamily:"Courier New",fontSize:11,color:OK,alignSelf:"center"}}>{saveMsg}</span>}
+          <button style={BTN_S} onClick={()=>{if(window.confirm("Clear all?")){{setMats([]);setLabs([])}}}}>✕ Clear</button>
+        </div>
+      </Sec>
+      {modal&&<MobileModal content={modal} onClose={()=>setModal(null)} title="Cost Estimate"/>}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════
+   BOQ GENERATOR
+══════════════════════════════════════════════════════ */
+function BOQGenerator({display,rates,projName,client,loc,ptype,onSave,savedData}){
+  const [items,setItems]=useState([]);
+  const [modal,setModal]=useState(null);
+  const [saveMsg,setSaveMsg]=useState("");
+  const sym=display;
+  const cv=n=>fromGHS(n,display,rates);
+
+  useEffect(()=>{if(savedData&&savedData.items)setItems(savedData.items);},[]);
+
+  const grandGHS=items.reduce((s,r)=>s+toGHS(sf(r.qty)*sf(r.rate),r.cur||"GHS",rates),0);
+  const grouped=BOQ_SECTIONS.reduce((acc,sec)=>{const rows=items.filter(i=>i.section===sec);if(rows.length)acc[sec]=rows;return acc;},{});
+
+  const handleSave=()=>{onSave({items});setSaveMsg("✓ Saved!");setTimeout(()=>setSaveMsg(""),2000);};
+
+  const buildHTML=()=>{
+    let n=1;
+    const fxNote=display!=="GHS"?`<p style="font-size:11px;color:#6b7280;margin-top:4px">Display: ${sym} · Rate: 1 USD=GHS ${fmtX(1/rates.USD)}, 1 GBP=GHS ${fmtX(1/rates.GBP)}, 1 EUR=GHS ${fmtX(1/rates.EUR)} · ${today()}</p>`:"";
+    const sectHTML=Object.entries(grouped).map(([sec,rows])=>{
+      let stGHS=0;
+      const rHTML=rows.map(r=>{const tGHS=toGHS(sf(r.qty)*sf(r.rate),r.cur||"GHS",rates);stGHS+=tGHS;return`<tr><td style="padding:8px 10px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#374151">${n++}</td><td style="padding:8px 10px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#111">${r.description||"—"}${r.notes?`<div style="font-size:11px;color:#6b7280;margin-top:2px">Note: ${r.notes}</div>`:""}</td><td style="padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:center;font-size:13px">${r.qty}</td><td style="padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:center;font-size:13px">${r.unit}</td><td style="padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:right;font-family:monospace;font-size:13px">${sym} ${fmtX(cv(toGHS(sf(r.rate),r.cur||"GHS",rates)))}</td><td style="padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:right;font-family:monospace;font-size:13px;font-weight:600">${sym} ${fmtX(cv(tGHS))}</td></tr>`;}).join("");
+      return`<tr><td colspan="6" style="padding:10px;background:#f3f4f6;font-weight:700;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#374151;border-top:2px solid #c9a84c">${sec}</td></tr>${rHTML}<tr><td colspan="5" style="padding:8px 10px;text-align:right;font-size:12px;color:#6b7280;font-style:italic">Section Total:</td><td style="padding:8px 10px;text-align:right;font-family:monospace;font-weight:700;color:#c9a84c">${sym} ${fmtX(cv(stGHS))}</td></tr>`;
+    }).join("");
+    return`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>BOQ</title><style>body{font-family:Arial,sans-serif;padding:30px;color:#111;margin:0}.hdr{border-bottom:3px solid #c9a84c;padding-bottom:16px;margin-bottom:24px}.co{font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:#c9a84c;font-weight:700}h1{font-size:22px;color:#0a1628;margin:6px 0}.meta{font-size:12px;color:#6b7280;margin-top:6px}table{width:100%;border-collapse:collapse}th{background:#0a1628;color:#c9a84c;padding:10px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;text-align:left}.grand{background:#0a1628;color:#e8c97a;padding:12px 10px;font-weight:700;font-size:15px}.footer{margin-top:30px;font-size:11px;color:#9ca3af;text-align:center}@media print{body{padding:15px}}</style></head><body><div class="hdr"><div class="co">TuoBuilds Consult</div><h1>Bill of Quantities</h1><div class="meta"><strong>${projName||"Unnamed Project"}</strong>${client?" · "+client:""}${loc?" · "+loc:""} · ${ptype} · ${today()}</div>${fxNote}</div><table><thead><tr><th style="width:40px">No.</th><th>Description</th><th style="width:60px;text-align:center">Qty</th><th style="width:60px;text-align:center">Unit</th><th style="width:105px;text-align:right">Rate (${sym})</th><th style="width:115px;text-align:right">Amount (${sym})</th></tr></thead><tbody>${sectHTML}<tr><td colspan="5" class="grand" style="text-align:right">GRAND TOTAL</td><td class="grand" style="text-align:right;font-family:monospace">${sym} ${fmtX(cv(grandGHS))}</td></tr></tbody></table><div class="footer">TuoBuilds Consult | Civil & Structural Engineering | ${today()} | Price DB May 2026</div></body></html>`;
+  };
+
+  const TH={fontFamily:"Courier New,monospace",fontSize:10,letterSpacing:"0.18em",textTransform:"uppercase",color:GOLD_D,padding:"0 6px 8px",textAlign:"left",borderBottom:`1px solid ${BORDER}`};
+  const TD={padding:"5px 6px",verticalAlign:"middle"};
+
+  return(
+    <div>
+      <Sec title="BOQ Items">
+        {items.length>0&&(
+          <div style={{overflowX:"auto",marginBottom:10}}>
+            <table style={{width:"100%",borderCollapse:"collapse",minWidth:620}}>
+              <thead><tr>
+                <th style={{...TH,width:150}}>Section</th><th style={TH}>Description</th>
+                <th style={{...TH,width:56}}>Qty</th><th style={{...TH,width:72}}>Unit</th>
+                <th style={{...TH,width:72}}>In</th><th style={{...TH,width:88}}>Rate</th>
+                <th style={{...TH,width:105,textAlign:"right"}}>Amt ({sym})</th>
+                <th style={{...TH,width:85}}>Notes</th><th style={{...TH,width:30}}/>
+              </tr></thead>
+              <tbody>{items.map(row=>{
+                const tGHS=toGHS(sf(row.qty)*sf(row.rate),row.cur||"GHS",rates);
+                return(
+                  <tr key={row.id} style={{borderBottom:`1px solid rgba(201,168,76,0.07)`}}>
+                    <td style={TD}><select style={{...SEL,fontSize:10}} value={row.section} onChange={e=>setItems(is=>is.map(i=>i.id===row.id?{...i,section:e.target.value}:i))}>{BOQ_SECTIONS.map(s=><option key={s}>{s}</option>)}</select></td>
+                    <td style={TD}><input style={INP} value={row.description} placeholder="Description" onChange={e=>setItems(is=>is.map(i=>i.id===row.id?{...i,description:e.target.value}:i))}/></td>
+                    <td style={TD}><input style={INP} type="number" value={row.qty} min={0} onChange={e=>setItems(is=>is.map(i=>i.id===row.id?{...i,qty:e.target.value}:i))}/></td>
+                    <td style={TD}><select style={{...SEL,fontSize:10}} value={row.unit} onChange={e=>setItems(is=>is.map(i=>i.id===row.id?{...i,unit:e.target.value}:i))}>{UNITS.map(u=><option key={u}>{u}</option>)}</select></td>
+                    <td style={TD}><select style={{...SEL,fontSize:10}} value={row.cur||"GHS"} onChange={e=>setItems(is=>is.map(i=>i.id===row.id?{...i,cur:e.target.value}:i))}>{CURRS.map(c=><option key={c}>{c}</option>)}</select></td>
+                    <td style={TD}><input style={INP} type="number" value={row.rate} min={0} onChange={e=>setItems(is=>is.map(i=>i.id===row.id?{...i,rate:e.target.value}:i))}/></td>
+                    <td style={{...TD,textAlign:"right",whiteSpace:"nowrap"}}>
+                      <div style={{fontFamily:"Courier New",fontSize:11,color:GOLD_L}}>{sym} {fmtX(cv(tGHS))}</div>
+                      {display!=="GHS"&&<div style={{fontSize:9,color:MUTED}}>GHS {fmtN(tGHS)}</div>}
+                    </td>
+                    <td style={TD}><input style={{...INP,fontSize:10}} value={row.notes} placeholder="Notes" onChange={e=>setItems(is=>is.map(i=>i.id===row.id?{...i,notes:e.target.value}:i))}/></td>
+                    <td style={TD}><DelBtn onClick={()=>setItems(is=>is.filter(i=>i.id!==row.id))}/></td>
+                  </tr>
+                );
+              })}</tbody>
+            </table>
+          </div>
+        )}
+        <button style={BTN_A} onClick={()=>setItems(is=>[...is,{id:uid(),section:"Substructure / Foundation",description:"",qty:1,unit:"m³",rate:0,cur:"GHS",notes:""}])}>＋ Add Item</button>
+      </Sec>
+      {items.length>0&&(
+        <Sec title={`BOQ Summary — ${sym}`}>
+          {Object.entries(grouped).map(([sec,rows])=>{
+            const tGHS=rows.reduce((s,r)=>s+toGHS(sf(r.qty)*sf(r.rate),r.cur||"GHS",rates),0);
+            return(
+              <div key={sec} style={{display:"flex",justifyContent:"space-between",padding:"8px 12px",marginBottom:4,background:NAVY,borderRadius:2,borderLeft:`2px solid ${GOLD_D}`}}>
+                <span style={{fontFamily:"Courier New",fontSize:11,color:MUTED}}>{sec}</span>
+                <div style={{textAlign:"right"}}>
+                  <span style={{fontFamily:"Courier New",fontSize:11,color:WHITE}}>{sym} {fmtX(cv(tGHS))}</span>
+                  {display!=="GHS"&&<div style={{fontSize:9,color:MUTED}}>GHS {fmtN(tGHS)}</div>}
+                </div>
+              </div>
+            );
+          })}
+          <div style={{display:"flex",justifyContent:"space-between",padding:"12px 14px",marginTop:8,background:"rgba(201,168,76,0.08)",border:`1px solid ${GOLD}`,borderRadius:2}}>
+            <span style={{fontFamily:"Courier New",fontSize:13,color:GOLD,fontWeight:700}}>GRAND TOTAL ({sym})</span>
+            <div style={{textAlign:"right"}}>
+              <span style={{fontFamily:"Courier New",fontSize:14,color:GOLD_L,fontWeight:700}}>{sym} {fmtX(cv(grandGHS))}</span>
+              {display!=="GHS"&&<div style={{fontSize:10,color:MUTED}}>GHS {fmtN(grandGHS)}</div>}
+            </div>
+          </div>
+          <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:14}}>
+            <button style={BTN_P} onClick={()=>printHTML(buildHTML())}>🖨 Print / PDF BOQ</button>
+            <button style={BTN_S} onClick={handleSave}>💾 Save</button>
+            {saveMsg&&<span style={{fontFamily:"Courier New",fontSize:11,color:OK,alignSelf:"center"}}>{saveMsg}</span>}
+            <button style={BTN_S} onClick={()=>{if(window.confirm("Clear all?"))setItems([]);}}>✕ Clear</button>
+          </div>
+        </Sec>
+      )}
+      {modal&&<MobileModal content={modal} onClose={()=>setModal(null)} title="BOQ Export"/>}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════
+   INVOICE / QUOTATION
+══════════════════════════════════════════════════════ */
+function InvoiceGen({display,rates,projName,client,loc,ptype}){
+  const [type,setType]=useState("Quotation");
+  const [invNo,setInvNo]=useState(`TBC-${new Date().getFullYear()}-001`);
+  const [issueDate,setIssueDate]=useState(isoDate());
+  const [dueDate,setDueDate]=useState("");
+  const [toName,setToName]=useState(client||"");
+  const [toAddr,setToAddr]=useState(loc||"");
+  const [toEmail,setToEmail]=useState("");
+  const [toPhone,setToPhone]=useState("");
+  const [invCurr,setInvCurr]=useState(display);
+  const [lines,setLines]=useState([{id:uid(),desc:"",qty:1,unit:"lump sum",rate:0,cur:display}]);
+  const [disc,setDisc]=useState("0");
+  const [vatP,setVatP]=useState("0");
+  const [notes,setNotes]=useState("Payment terms: 50% advance, 50% on completion.");
+  useEffect(()=>{setToName(client||"");setToAddr(loc||"");},[client,loc]);
+
+  const sym=invCurr;
+  const cv=n=>fromGHS(n,invCurr,rates);
+  const subGHS=lines.reduce((s,r)=>s+toGHS(sf(r.qty)*sf(r.rate),r.cur||invCurr,rates),0);
+  const discAmt=subGHS*sf(disc)/100,aft=subGHS-discAmt,vatAmt=aft*sf(vatP)/100,totalGHS=aft+vatAmt;
+
+  const buildHTML=()=>{
+    const fxLine=CURRS.filter(c=>c!==invCurr).map(c=>`1 ${invCurr} = ${fmtX(crossConvert(1,invCurr,c,rates))} ${c}`).join(" &nbsp;·&nbsp; ");
+    const lHTML=lines.map((r,i)=>{const tGHS=toGHS(sf(r.qty)*sf(r.rate),r.cur||invCurr,rates);return`<tr><td style="padding:9px 10px;border-bottom:1px solid #e5e7eb;font-size:13px">${i+1}</td><td style="padding:9px 10px;border-bottom:1px solid #e5e7eb;font-size:13px">${r.desc||"—"}</td><td style="padding:9px 10px;border-bottom:1px solid #e5e7eb;text-align:center;font-size:13px">${r.qty}</td><td style="padding:9px 10px;border-bottom:1px solid #e5e7eb;text-align:center;font-size:13px">${r.unit}</td><td style="padding:9px 10px;border-bottom:1px solid #e5e7eb;text-align:right;font-family:monospace;font-size:13px">${sym} ${fmtX(cv(toGHS(sf(r.rate),r.cur||invCurr,rates)))}</td><td style="padding:9px 10px;border-bottom:1px solid #e5e7eb;text-align:right;font-family:monospace;font-size:13px;font-weight:600">${sym} ${fmtX(cv(tGHS))}</td></tr>`;}).join("");
+    return`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${type} ${invNo}</title><style>body{font-family:Arial,sans-serif;padding:36px;color:#111;margin:0;max-width:800px;margin:0 auto}.top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px}.co-name{font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:#c9a84c;font-weight:700;margin-bottom:4px}.co-title{font-size:28px;font-weight:900;color:#0a1628;font-family:Georgia,serif}.inv-type{font-size:28px;font-weight:700;color:#c9a84c;text-align:right}.inv-no{font-size:13px;color:#6b7280;text-align:right;margin-top:4px}.parties{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px;padding:16px;background:#f9fafb;border-radius:4px}.party-lbl{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:#c9a84c;font-weight:700;margin-bottom:6px}.party-name{font-size:14px;font-weight:700;color:#111;margin-bottom:3px}.party-info{font-size:12px;color:#6b7280;line-height:1.6}table{width:100%;border-collapse:collapse}th{background:#0a1628;color:#c9a84c;padding:10px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;text-align:left}.totals{display:flex;justify-content:flex-end;margin-top:0}.totals-box{width:320px;border:1px solid #e5e7eb;border-radius:4px;overflow:hidden}.t-row{display:flex;justify-content:space-between;padding:9px 14px;border-bottom:1px solid #f0f0f0;font-size:13px}.t-total{display:flex;justify-content:space-between;padding:12px 14px;background:#0a1628;font-size:15px;font-weight:700;color:#e8c97a}.notes-box{margin-top:20px;padding:14px;background:#f9fafb;border-radius:4px;font-size:12px;color:#555;line-height:1.7}.notes-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:#c9a84c;font-weight:700;margin-bottom:6px}.fxbar{font-size:11px;color:#6b7280;padding:8px 0;border-top:1px solid #e5e7eb;margin-top:20px}.footer{margin-top:16px;font-size:11px;color:#9ca3af;text-align:center}@media print{body{padding:15px}}</style></head><body>
+    <div class="top"><div><div class="co-name">TuoBuilds Consult</div><div class="co-title">TuoBuilds</div><div style="font-size:11px;color:#6b7280;margin-top:4px">Civil & Structural Engineering · Kumasi, Ghana</div></div><div><div class="inv-type">${type}</div><div class="inv-no">${invNo}</div><div style="font-size:12px;color:#6b7280;text-align:right;margin-top:4px">Issued: ${issueDate}${dueDate?" · Due: "+dueDate:""}</div></div></div>
+    <div class="parties"><div><div class="party-lbl">From</div><div class="party-name">TuoBuilds Consult</div><div class="party-info">Kumasi, Ashanti Region, Ghana</div></div><div><div class="party-lbl">Bill To</div><div class="party-name">${toName||"Client Name"}</div><div class="party-info">${toAddr||""}${toEmail?"<br>"+toEmail:""}${toPhone?"<br>"+toPhone:""}</div></div></div>
+    <table><thead><tr><th style="width:36px">No.</th><th>Description</th><th style="width:55px;text-align:center">Qty</th><th style="width:65px;text-align:center">Unit</th><th style="width:110px;text-align:right">Rate (${sym})</th><th style="width:120px;text-align:right">Amount (${sym})</th></tr></thead><tbody>${lHTML}</tbody></table>
+    <div class="totals"><div class="totals-box"><div class="t-row"><span>Subtotal</span><span style="font-family:monospace">${sym} ${fmtX(cv(subGHS))}</span></div>${sf(disc)>0?`<div class="t-row"><span>Discount (${sf(disc).toFixed(1)}%)</span><span style="font-family:monospace;color:#e05a5a">- ${sym} ${fmtX(cv(discAmt))}</span></div>`:""}${vatAmt>0?`<div class="t-row"><span>VAT/Tax (${sf(vatP).toFixed(1)}%)</span><span style="font-family:monospace">${sym} ${fmtX(cv(vatAmt))}</span></div>`:""}<div class="t-total"><span>TOTAL</span><span style="font-family:monospace">${sym} ${fmtX(cv(totalGHS))}</span></div></div></div>
+    ${notes?`<div class="notes-box"><div class="notes-lbl">Notes & Terms</div>${notes}</div>`:""}
+    <div class="fxbar">Exchange rates (${today()}): ${fxLine}</div>
+    <div class="footer">TuoBuilds Consult | Civil & Structural Engineering | ${today()}</div></body></html>`;
+  };
+
+  const TH={fontFamily:"Courier New,monospace",fontSize:10,letterSpacing:"0.18em",textTransform:"uppercase",color:GOLD_D,padding:"0 6px 8px",textAlign:"left",borderBottom:`1px solid ${BORDER}`};
+  const TD={padding:"5px 6px",verticalAlign:"middle"};
+
+  return(
+    <div>
+      <Sec title="Document Details">
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
+          <Field label="Document Type"><select style={SEL} value={type} onChange={e=>setType(e.target.value)}>{["Quotation","Invoice","Proforma Invoice","Receipt","Variation Order"].map(t=><option key={t}>{t}</option>)}</select></Field>
+          <Field label="Reference No."><input style={INP} value={invNo} onChange={e=>setInvNo(e.target.value)}/></Field>
+          <Field label="Invoice Currency"><select style={{...SEL,borderColor:GOLD,color:GOLD}} value={invCurr} onChange={e=>setInvCurr(e.target.value)}>{CURRS.map(c=><option key={c}>{CURR_FLAGS[c]} {c}</option>)}</select></Field>
+          <Field label="Issue Date"><input style={INP} type="date" value={issueDate} onChange={e=>setIssueDate(e.target.value)}/></Field>
+          <Field label="Due / Valid Until"><input style={INP} type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)}/></Field>
+        </div>
+      </Sec>
+      <Sec title="Bill To">
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <Field label="Client Name"><input style={INP} value={toName} placeholder="Client / Company" onChange={e=>setToName(e.target.value)}/></Field>
+          <Field label="Address"><input style={INP} value={toAddr} onChange={e=>setToAddr(e.target.value)}/></Field>
+          <Field label="Email"><input style={INP} value={toEmail} onChange={e=>setToEmail(e.target.value)}/></Field>
+          <Field label="Phone"><input style={INP} value={toPhone} placeholder="+233 …" onChange={e=>setToPhone(e.target.value)}/></Field>
+        </div>
+      </Sec>
+      <Sec title={`Line Items — ${sym}`}>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",minWidth:520}}>
+            <thead><tr><th style={TH}>Description</th><th style={{...TH,width:60}}>Qty</th><th style={{...TH,width:85}}>Unit</th><th style={{...TH,width:72}}>In</th><th style={{...TH,width:105}}>Rate</th><th style={{...TH,width:115,textAlign:"right"}}>Amt ({sym})</th><th style={{...TH,width:30}}/></tr></thead>
+            <tbody>{lines.map(row=>{const tGHS=toGHS(sf(row.qty)*sf(row.rate),row.cur||invCurr,rates);return(
+              <tr key={row.id} style={{borderBottom:`1px solid rgba(201,168,76,0.07)`}}>
+                <td style={TD}><input style={INP} value={row.desc} placeholder="Service / work item" onChange={e=>setLines(ls=>ls.map(l=>l.id===row.id?{...l,desc:e.target.value}:l))}/></td>
+                <td style={TD}><input style={INP} type="number" value={row.qty} min={0} onChange={e=>setLines(ls=>ls.map(l=>l.id===row.id?{...l,qty:e.target.value}:l))}/></td>
+                <td style={TD}><select style={{...SEL,fontSize:11}} value={row.unit} onChange={e=>setLines(ls=>ls.map(l=>l.id===row.id?{...l,unit:e.target.value}:l))}>{UNITS.map(u=><option key={u}>{u}</option>)}</select></td>
+                <td style={TD}><select style={{...SEL,fontSize:11}} value={row.cur||invCurr} onChange={e=>setLines(ls=>ls.map(l=>l.id===row.id?{...l,cur:e.target.value}:l))}>{CURRS.map(c=><option key={c}>{c}</option>)}</select></td>
+                <td style={TD}><input style={INP} type="number" value={row.rate} min={0} onChange={e=>setLines(ls=>ls.map(l=>l.id===row.id?{...l,rate:e.target.value}:l))}/></td>
+                <td style={{...TD,textAlign:"right",whiteSpace:"nowrap"}}>
+                  <div style={{fontFamily:"Courier New",fontSize:12,color:GOLD_L}}>{sym} {fmtX(cv(tGHS))}</div>
+                  {invCurr!=="GHS"&&<div style={{fontSize:9,color:MUTED}}>GHS {fmtN(tGHS)}</div>}
+                </td>
+                <td style={TD}><DelBtn onClick={()=>setLines(ls=>ls.filter(l=>l.id!==row.id))}/></td>
+              </tr>
+            );})}</tbody>
+          </table>
+        </div>
+        <button style={BTN_A} onClick={()=>setLines(ls=>[...ls,{id:uid(),desc:"",qty:1,unit:"lump sum",rate:0,cur:invCurr}])}>＋ Add Line</button>
+      </Sec>
+      <Sec title="Totals & Terms">
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:16}}>
+          <Field label="Discount (%)"><input style={INP} type="number" value={disc} min={0} max={100} onChange={e=>setDisc(e.target.value)}/></Field>
+          <Field label="VAT / Tax (%)"><input style={INP} type="number" value={vatP} min={0} onChange={e=>setVatP(e.target.value)}/></Field>
+        </div>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:16}}>
+          <SumBox label="Subtotal" val={`${sym} ${fmtX(cv(subGHS))}`} sub={invCurr!=="GHS"?`GHS ${fmtN(subGHS)}`:null}/>
+          {sf(disc)>0&&<SumBox label={`Disc ${sf(disc).toFixed(1)}%`} val={`- ${sym} ${fmtX(cv(discAmt))}`} color={DANGER}/>}
+          {vatAmt>0&&<SumBox label={`VAT ${sf(vatP).toFixed(1)}%`} val={`${sym} ${fmtX(cv(vatAmt))}`}/>}
+          <SumBox label={`Total (${sym})`} val={`${sym} ${fmtX(cv(totalGHS))}`} sub={invCurr!=="GHS"?`GHS ${fmtN(totalGHS)}`:null} accent/>
+        </div>
+        <Field label="Notes / Payment Terms"><textarea style={{...INP,resize:"vertical",height:70,lineHeight:1.6}} value={notes} onChange={e=>setNotes(e.target.value)}/></Field>
+        <div style={{display:"flex",gap:10,marginTop:14}}><button style={BTN_P} onClick={()=>printHTML(buildHTML())}>🖨 Print / PDF {type}</button></div>
+      </Sec>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════
+   PROGRESS TRACKER
+══════════════════════════════════════════════════════ */
+function ProgressTracker({projName,onSave,savedData}){
+  const [tasks,setTasks]=useState([]);
+  const [saveMsg,setSaveMsg]=useState("");
+
+  useEffect(()=>{
+    if(savedData&&savedData.tasks){setTasks(savedData.tasks);return;}
+    setTasks([
+      {id:uid(),stage:"Site Preparation",task:"Site clearance & levelling",status:"Done",pct:100,start:"",end:"",notes:""},
+      {id:uid(),stage:"Foundation",task:"Set out & excavation",status:"Done",pct:100,start:"",end:"",notes:""},
+      {id:uid(),stage:"Foundation",task:"Anti-termite treatment",status:"Done",pct:100,start:"",end:"",notes:""},
+      {id:uid(),stage:"Foundation",task:"Concrete footings & blinding",status:"In Progress",pct:60,start:"",end:"",notes:""},
+      {id:uid(),stage:"Superstructure",task:"Block laying to DPC",status:"Not Started",pct:0,start:"",end:"",notes:""},
+      {id:uid(),stage:"Superstructure",task:"Columns & ring beam",status:"Not Started",pct:0,start:"",end:"",notes:""},
+      {id:uid(),stage:"Superstructure",task:"Suspended slab (if applicable)",status:"Not Started",pct:0,start:"",end:"",notes:""},
+      {id:uid(),stage:"Roofing",task:"Roof truss installation",status:"Not Started",pct:0,start:"",end:"",notes:""},
+      {id:uid(),stage:"Roofing",task:"Roofing sheet & gutters",status:"Not Started",pct:0,start:"",end:"",notes:""},
+      {id:uid(),stage:"MEP Rough-in",task:"Electrical 1st fix (conduits)",status:"Not Started",pct:0,start:"",end:"",notes:""},
+      {id:uid(),stage:"MEP Rough-in",task:"Plumbing 1st fix (pipes)",status:"Not Started",pct:0,start:"",end:"",notes:""},
+      {id:uid(),stage:"Finishes",task:"Plastering & rendering",status:"Not Started",pct:0,start:"",end:"",notes:""},
+      {id:uid(),stage:"Finishes",task:"Screeding & tiling",status:"Not Started",pct:0,start:"",end:"",notes:""},
+      {id:uid(),stage:"Finishes",task:"Painting (interior & exterior)",status:"Not Started",pct:0,start:"",end:"",notes:""},
+      {id:uid(),stage:"MEP Fit-out",task:"Electrical 2nd fix",status:"Not Started",pct:0,start:"",end:"",notes:""},
+      {id:uid(),stage:"MEP Fit-out",task:"Plumbing 2nd fix & sanitary",status:"Not Started",pct:0,start:"",end:"",notes:""},
+      {id:uid(),stage:"External Works",task:"Boundary wall & gate",status:"Not Started",pct:0,start:"",end:"",notes:""},
+      {id:uid(),stage:"External Works",task:"Driveway & paving",status:"Not Started",pct:0,start:"",end:"",notes:""},
+      {id:uid(),stage:"Handover",task:"Snagging & defect rectification",status:"Not Started",pct:0,start:"",end:"",notes:""},
+      {id:uid(),stage:"Handover",task:"Final inspection & handover",status:"Not Started",pct:0,start:"",end:"",notes:""},
+    ]);
+  },[]);
+
+  const overallPct=tasks.length?Math.round(tasks.reduce((s,t)=>s+sf(t.pct),0)/tasks.length):0;
+  const stages=[...new Set(tasks.map(t=>t.stage))];
+  const done=tasks.filter(t=>t.status==="Done").length;
+  const handleSave=()=>{onSave({tasks});setSaveMsg("✓ Saved!");setTimeout(()=>setSaveMsg(""),2000);};
+
+  const buildPrintHTML=()=>{
+    const stHTML=stages.map((st,si)=>{
+      const color=STAGE_COLORS[si%STAGE_COLORS.length];
+      const stT=tasks.filter(t=>t.stage===st);
+      const sPct=Math.round(stT.reduce((s,t)=>s+sf(t.pct),0)/stT.length);
+      return`<div style="margin-bottom:20px"><div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#f3f4f6;border-left:4px solid ${color};margin-bottom:8px"><strong style="font-size:13px">${st}</strong><span style="font-size:12px;color:#555">${sPct}% complete</span></div><table style="width:100%;border-collapse:collapse"><thead><tr style="background:#f9fafb"><th style="padding:7px 10px;font-size:11px;text-align:left;border-bottom:1px solid #e5e7eb">Task</th><th style="padding:7px 10px;font-size:11px;text-align:left;border-bottom:1px solid #e5e7eb;width:90px">Status</th><th style="padding:7px 10px;font-size:11px;text-align:center;border-bottom:1px solid #e5e7eb;width:50px">%</th><th style="padding:7px 10px;font-size:11px;text-align:left;border-bottom:1px solid #e5e7eb;width:80px">Start</th><th style="padding:7px 10px;font-size:11px;text-align:left;border-bottom:1px solid #e5e7eb;width:80px">End</th><th style="padding:7px 10px;font-size:11px;text-align:left;border-bottom:1px solid #e5e7eb">Notes</th></tr></thead><tbody>${stT.map(t=>`<tr><td style="padding:8px 10px;font-size:12px;border-bottom:1px solid #f0f0f0">${t.task||"—"}</td><td style="padding:8px 10px;font-size:12px;border-bottom:1px solid #f0f0f0"><span style="background:${STATUS_COLORS[t.status]||MUTED};color:#fff;padding:2px 8px;border-radius:10px;font-size:10px">${t.status}</span></td><td style="padding:8px 10px;text-align:center;font-size:12px;border-bottom:1px solid #f0f0f0">${t.pct}%</td><td style="padding:8px 10px;font-size:12px;border-bottom:1px solid #f0f0f0">${t.start||"—"}</td><td style="padding:8px 10px;font-size:12px;border-bottom:1px solid #f0f0f0">${t.end||"—"}</td><td style="padding:8px 10px;font-size:11px;color:#6b7280;border-bottom:1px solid #f0f0f0">${t.notes||""}</td></tr>`).join("")}</tbody></table></div>`;
+    }).join("");
+    return`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Progress Report</title><style>body{font-family:Arial,sans-serif;padding:32px;color:#111;margin:0}.hdr{border-bottom:3px solid #c9a84c;padding-bottom:16px;margin-bottom:24px}.co{font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:#c9a84c;font-weight:700}h1{font-size:22px;color:#0a1628;margin:6px 0}.meta{font-size:12px;color:#6b7280;margin-top:6px}.pb{height:16px;background:#e5e7eb;border-radius:8px;overflow:hidden;margin:12px 0}.pf{height:100%;background:linear-gradient(90deg,#4c7fc9,#4caf82);border-radius:8px}.footer{margin-top:30px;font-size:11px;color:#9ca3af;text-align:center;border-top:1px solid #e5e7eb;padding-top:14px}@media print{body{padding:15px}}</style></head><body><div class="hdr"><div class="co">TuoBuilds Consult</div><h1>Project Progress Report</h1><div class="meta"><strong>${projName||"Unnamed Project"}</strong> · ${today()}</div></div><div style="margin-bottom:24px"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><strong>Overall Completion</strong><strong>${overallPct}% (${done}/${tasks.length} tasks done)</strong></div><div class="pb"><div class="pf" style="width:${overallPct}%"></div></div></div>${stHTML}<div class="footer">TuoBuilds Consult | Civil & Structural Engineering | ${today()}</div></body></html>`;
+  };
+
+  const TH={fontFamily:"Courier New,monospace",fontSize:10,letterSpacing:"0.18em",textTransform:"uppercase",color:GOLD_D,padding:"0 6px 8px",textAlign:"left",borderBottom:`1px solid ${BORDER}`};
+  const TD={padding:"5px 6px",verticalAlign:"middle"};
+
+  return(
+    <div>
+      <Sec title="Overall Progress">
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+          <span style={{fontFamily:"Courier New",fontSize:12,color:MUTED}}>Project Completion</span>
+          <span style={{fontFamily:"Courier New",fontSize:14,color:GOLD_L,fontWeight:700}}>{overallPct}% &nbsp;·&nbsp; {done}/{tasks.length} tasks</span>
+        </div>
+        <div style={{height:18,background:NAVY,borderRadius:9,overflow:"hidden",marginBottom:14}}>
+          <div style={{height:"100%",width:`${overallPct}%`,background:`linear-gradient(90deg,${BLUE},${OK})`,borderRadius:9,transition:"width 0.5s ease"}}/>
+        </div>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+          {STATUS_OPTS.map(s=>{const cnt=tasks.filter(t=>t.status===s).length;if(!cnt)return null;return(<div key={s} style={{display:"flex",alignItems:"center",gap:6,fontFamily:"Courier New",fontSize:11,color:MUTED}}><div style={{width:10,height:10,background:STATUS_COLORS[s],borderRadius:2}}/>{s} ({cnt})</div>);})}
+        </div>
+      </Sec>
+
+      {stages.map((stage,si)=>{
+        const color=STAGE_COLORS[si%STAGE_COLORS.length];
+        const stT=tasks.filter(t=>t.stage===stage);
+        const sPct=Math.round(stT.reduce((s,t)=>s+sf(t.pct),0)/stT.length);
+        return(
+          <Sec key={stage} title={`${stage} — ${sPct}%`}>
+            <div style={{height:6,background:NAVY,borderRadius:3,overflow:"hidden",marginBottom:12}}><div style={{height:"100%",width:`${sPct}%`,background:color,borderRadius:3,transition:"width 0.4s"}}/></div>
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",minWidth:520}}>
+                <thead><tr><th style={TH}>Task</th><th style={{...TH,width:110}}>Status</th><th style={{...TH,width:65}}>%</th><th style={{...TH,width:95}}>Start</th><th style={{...TH,width:95}}>End</th><th style={TH}>Notes</th><th style={{...TH,width:30}}/></tr></thead>
+                <tbody>{stT.map(row=>(
+                  <tr key={row.id} style={{borderBottom:`1px solid rgba(201,168,76,0.07)`}}>
+                    <td style={TD}><input style={INP} value={row.task} placeholder="Task description" onChange={e=>setTasks(ts=>ts.map(t=>t.id===row.id?{...t,task:e.target.value}:t))}/></td>
+                    <td style={TD}><select style={{...SEL,fontSize:11,borderColor:STATUS_COLORS[row.status]||BORDER,color:STATUS_COLORS[row.status]||WHITE}} value={row.status} onChange={e=>setTasks(ts=>ts.map(t=>t.id===row.id?{...t,status:e.target.value,pct:e.target.value==="Done"?100:t.pct}:t))}>{STATUS_OPTS.map(s=><option key={s}>{s}</option>)}</select></td>
+                    <td style={TD}><input style={INP} type="number" value={row.pct} min={0} max={100} onChange={e=>setTasks(ts=>ts.map(t=>t.id===row.id?{...t,pct:Math.min(100,sf(e.target.value))}:t))}/></td>
+                    <td style={TD}><input style={{...INP,fontSize:11}} type="date" value={row.start} onChange={e=>setTasks(ts=>ts.map(t=>t.id===row.id?{...t,start:e.target.value}:t))}/></td>
+                    <td style={TD}><input style={{...INP,fontSize:11}} type="date" value={row.end} onChange={e=>setTasks(ts=>ts.map(t=>t.id===row.id?{...t,end:e.target.value}:t))}/></td>
+                    <td style={TD}><input style={{...INP,fontSize:11}} value={row.notes} placeholder="Notes" onChange={e=>setTasks(ts=>ts.map(t=>t.id===row.id?{...t,notes:e.target.value}:t))}/></td>
+                    <td style={TD}><DelBtn onClick={()=>setTasks(ts=>ts.filter(t=>t.id!==row.id))}/></td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          </Sec>
+        );
+      })}
+
+      <Sec title="Add Tasks">
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          {["Site Preparation","Foundation","Superstructure","Roofing","MEP Rough-in","Finishes","MEP Fit-out","External Works","Landscaping","Handover"].map(stage=>(
+            <button key={stage} style={{...BTN_A,marginTop:0}} onClick={()=>setTasks(ts=>[...ts,{id:uid(),stage,task:"",status:"Not Started",pct:0,start:"",end:"",notes:""}])}>＋ {stage}</button>
+          ))}
+        </div>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:14}}>
+          <button style={BTN_P} onClick={()=>printHTML(buildPrintHTML())}>🖨 Print Progress Report</button>
+          <button style={BTN_S} onClick={handleSave}>💾 Save</button>
+          {saveMsg&&<span style={{fontFamily:"Courier New",fontSize:11,color:OK,alignSelf:"center"}}>{saveMsg}</span>}
+        </div>
+      </Sec>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════
+   ROOT APP
+══════════════════════════════════════════════════════ */
+const TABS=["Cost Estimator","BOQ Generator","Invoice/Quotation","Progress Tracker"];
+const STORAGE_KEY="tuobuilds_v4";
+
+function App(){
+  const [tab,setTab]=useState(0);
+  const [projName,setProjName]=useState("");
+  const [client,setClient]=useState("");
+  const [loc,setLoc]=useState("Kumasi, Ashanti");
+  const [ptype,setPtype]=useState("Residential");
+  const [display,setDisplay]=useState("GHS");
+  const [rates,setRates]=useState(FALLBACK_RATES);
+  const [rateStatus,setRateStatus]=useState("Fallback rates — May 2026 Stanbic mid");
+  const [savedData,setSavedData]=useState({est:{},boq:{},tracker:{}});
+
+  const fetchRates=useCallback(async()=>{
+    setRateStatus("⟳ Fetching live rates…");
+    try{
+      const r=await fetch("https://api.frankfurter.app/latest?base=GHS&symbols=USD,GBP,EUR");
+      if(!r.ok)throw new Error();
+      const j=await r.json();
+      if(j&&j.rates){setRates({GHS:1,...j.rates});setRateStatus(`✓ Live · ${new Date().toLocaleTimeString()}`);return;}
+    }catch(e){}
+    try{
+      const r2=await fetch("https://open.er-api.com/v6/latest/GHS");
+      const j2=await r2.json();
+      if(j2&&j2.rates){setRates({GHS:1,USD:j2.rates.USD,GBP:j2.rates.GBP,EUR:j2.rates.EUR});setRateStatus(`✓ Live (alt) · ${new Date().toLocaleTimeString()}`);return;}
+    }catch(e){}
+    setRateStatus("⚠ Offline — using May 2026 fallback");
+  },[]);
+
+  useEffect(()=>{
+    try{
+      const raw=localStorage.getItem(STORAGE_KEY);
+      if(raw){const d=JSON.parse(raw);if(d.meta){setProjName(d.meta.projName||"");setClient(d.meta.client||"");setLoc(d.meta.loc||"Kumasi, Ashanti");setPtype(d.meta.ptype||"Residential");setDisplay(d.meta.display||"GHS");}setSavedData({est:d.est||{},boq:d.boq||{},tracker:d.tracker||{}});}
+    }catch(e){}
+    fetchRates();
+  },[]);
+
+  const saveSection=(key,data)=>{
+    try{const prev=JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}");localStorage.setItem(STORAGE_KEY,JSON.stringify({...prev,meta:{projName,client,loc,ptype,display},[key]:data}));setSavedData(s=>({...s,[key]:data}));}catch(e){}
+  };
+
+  return(
+    <div style={{background:NAVY,minHeight:"100vh",color:WHITE,fontFamily:"sans-serif"}}>
+      <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0,backgroundImage:`linear-gradient(rgba(201,168,76,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(201,168,76,0.025) 1px,transparent 1px)`,backgroundSize:"48px 48px"}}/>
+      <div style={{position:"relative",zIndex:1,maxWidth:980,margin:"0 auto",padding:"36px 18px 80px"}}>
+
+        {/* Header */}
+        <div style={{textAlign:"center",marginBottom:28,animation:"fadeUp 0.5s ease both"}}>
+          <div style={{display:"inline-flex",alignItems:"center",gap:12,marginBottom:10}}>
+            <div style={{width:32,height:32,border:`2px solid ${GOLD}`,transform:"rotate(45deg)",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{width:12,height:12,background:GOLD}}/></div>
+            <span style={{fontFamily:"Georgia,serif",fontSize:13,fontWeight:700,letterSpacing:"0.15em",textTransform:"uppercase",color:GOLD}}>TuoBuilds Consult</span>
+          </div>
+          <h1 style={{fontFamily:"Georgia,serif",fontSize:"clamp(1.6rem,4vw,2.6rem)",fontWeight:900,color:WHITE,margin:"0 0 8px"}}>Project <span style={{color:GOLD}}>Tools</span> <span style={{fontSize:"0.55em",fontFamily:"Courier New",color:MUTED,letterSpacing:"0.1em"}}>v4</span></h1>
+          <p style={{fontFamily:"Courier New,monospace",fontSize:10,letterSpacing:"0.22em",textTransform:"uppercase",color:MUTED,marginTop:4}}>
+            {GH_PRICES.length} Materials · {LABOUR_TEMPLATES.length} Labour Trades · Live FX · BOQ · Invoice · Progress
+          </p>
+          <div style={{width:50,height:2,background:`linear-gradient(90deg,${GOLD},transparent)`,margin:"10px auto 0"}}/>
+        </div>
+
+        {/* Project Details */}
+        <Sec title="Project Details">
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div style={{gridColumn:"1/-1"}}><Field label="Project Name"><input style={INP} value={projName} placeholder="e.g. 3-Bedroom Residential — Kumasi" onChange={e=>setProjName(e.target.value)}/></Field></div>
+            <Field label="Client / Owner"><input style={INP} value={client} placeholder="Client / Ref" onChange={e=>setClient(e.target.value)}/></Field>
+            <Field label="Site Location"><input style={INP} value={loc} placeholder="e.g. Adum, Kumasi" onChange={e=>setLoc(e.target.value)}/></Field>
+            <Field label="Project Type"><select style={SEL} value={ptype} onChange={e=>setPtype(e.target.value)}>{TYPES.map(t=><option key={t}>{t}</option>)}</select></Field>
+            <Field label="Display Currency">
+              <select style={{...SEL,borderColor:GOLD,color:GOLD}} value={display} onChange={e=>setDisplay(e.target.value)}>
+                {CURRS.map(c=><option key={c} value={c}>{CURR_FLAGS[c]} {c}</option>)}
+              </select>
+            </Field>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginTop:12,flexWrap:"wrap"}}>
+            <div style={{fontFamily:"Courier New",fontSize:10,color:MUTED}}>💾 Data auto-saves per section via localStorage</div>
+            <button onClick={()=>{if(window.confirm("Clear ALL saved data?"))try{localStorage.removeItem(STORAGE_KEY);setSavedData({est:{},boq:{},tracker:{}});}catch(e){}}} style={{...BTN_S,padding:"7px 14px",fontSize:10,marginLeft:"auto"}}>✕ Clear All Saved</button>
+          </div>
+        </Sec>
+
+        {/* Currency Panel */}
+        <CurrencyPanel display={display} setDisplay={setDisplay} rates={rates} setRates={setRates} rateStatus={rateStatus} refreshRates={fetchRates}/>
+
+        {/* Price DB Note */}
+        <div style={{fontFamily:"Courier New",fontSize:10,color:MUTED,textAlign:"center",marginBottom:12,letterSpacing:"0.1em"}}>
+          📊 Material prices sourced: BusyList · NewsGhana Nov 2025 · Troysteel 2025 · Added Supplies 2026 · GSS Prime Building Cost Index Jan 2026 (PBCI 132.4, inflation 3.9%) · Kumasi open market May 2026
+        </div>
+
+        {/* Tabs */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:2,marginBottom:16,background:NAVY_M,borderRadius:4,padding:4,border:`1px solid ${BORDER}`}}>
+          {TABS.map((t,i)=>(
+            <button key={t} onClick={()=>setTab(i)} style={{padding:"10px 6px",border:"none",borderRadius:3,cursor:"pointer",fontFamily:"Courier New,monospace",fontSize:"clamp(9px,1.5vw,11px)",letterSpacing:"0.1em",textTransform:"uppercase",transition:"all 0.2s",background:tab===i?NAVY_L:"none",color:tab===i?GOLD:MUTED,fontWeight:tab===i?700:"normal"}}>{t}</button>
+          ))}
+        </div>
+
+        {tab===0&&<CostEstimator display={display} rates={rates} projName={projName} client={client} loc={loc} ptype={ptype} onSave={d=>saveSection("est",d)} savedData={savedData.est}/>}
+        {tab===1&&<BOQGenerator  display={display} rates={rates} projName={projName} client={client} loc={loc} ptype={ptype} onSave={d=>saveSection("boq",d)} savedData={savedData.boq}/>}
+        {tab===2&&<InvoiceGen    display={display} rates={rates} projName={projName} client={client} loc={loc} ptype={ptype}/>}
+        {tab===3&&<ProgressTracker projName={projName} onSave={d=>saveSection("tracker",d)} savedData={savedData.tracker}/>}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
